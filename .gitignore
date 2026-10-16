@@ -147,3 +147,10 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# macOS Finder metadata
+.DS_Store
+
+*.xnb
+/Content/
+/Content (unpacked)/

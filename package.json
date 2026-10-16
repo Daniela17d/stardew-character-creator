@@ -1,0 +1,21 @@
+{
+  "name": "stardew-character-creator",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && tsc -p tsconfig.node.json && vite build",
+    "preview": "vite preview",
+    "catalog": "node scripts/build-catalog.ts --game-version 1.6.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.4"
+  }
+}
