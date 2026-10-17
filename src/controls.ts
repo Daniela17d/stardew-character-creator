@@ -2,8 +2,8 @@ import { ACCESSORY_NAMES } from './accessory-names.ts';
 import type { Catalog, Rgb } from './catalog/types.ts';
 import type { Outfit } from './outfit.ts';
 import type { Direction } from './render/animation.ts';
-import type { FarmerRenderer } from './render/farmer.ts';
-import { SCALE, type Surface } from './render/pixels.ts';
+import { BODY_X, BODY_Y, type FarmerRenderer, type Parts } from './render/farmer.ts';
+import { SCALE, type Rect, type Surface } from './render/pixels.ts';
 
 export interface ViewState {
   outfit: Outfit;
@@ -11,18 +11,27 @@ export interface ViewState {
   walking: boolean;
 }
 
-type Options = [value: string, label: string][];
+interface Choice<T> {
+  value: T;
+  label?: string;
+  caption?: string;
+  picture: HTMLElement;
+}
 
-const FIELD = 'w-56 rounded border border-black/20 bg-white px-2 py-1';
 const LABEL = 'font-semibold';
 const BUTTON = 'rounded border border-black/20 bg-white hover:bg-white/70 aria-pressed:bg-black aria-pressed:text-white';
 const TAB =
   'rounded border border-black/20 bg-white px-4 py-1 font-semibold hover:bg-white/70 aria-selected:border-[#8B4513] aria-selected:bg-[#8B4513] aria-selected:text-white';
 const OPTION =
   'flex flex-col items-center rounded border-2 border-transparent bg-white/50 p-1 text-xs font-semibold hover:bg-white aria-pressed:border-[#8B4513] aria-pressed:bg-white';
-const NONE_ICON =
-  '<svg viewBox="0 0 32 40" class="h-10 w-8 text-gray-500" fill="none" stroke="currentColor" stroke-width="3"><circle cx="16" cy="20" r="11"/><path d="M8.5 12.5l15 15"/></svg>';
-const BUST_ROWS = 20;
+
+const FULL_BODY = bodyArea(0, 0, 16, 32);
+const BUST = bodyArea(0, 0, 16, 20);
+const HEAD = bodyArea(0, 0, 16, 24);
+const TORSO = bodyArea(2, 13, 12, 12);
+const LEGS = bodyArea(0, 16, 16, 16);
+const FEET = bodyArea(0, 24, 16, 8);
+const WHOLE_HAT: Rect = { x: 0, y: 0, width: 20 * SCALE, height: 20 * SCALE };
 
 const FACING: Direction[] = ['up', 'right', 'down', 'left'];
 
@@ -90,9 +99,11 @@ export function createEditor(
   tabs.className = 'flex flex-wrap justify-center gap-2 border-b-2 border-[#8B4513] pb-4';
   const panel = document.createElement('div');
   panel.className = 'min-w-80';
-  const sections: { tab: HTMLButtonElement; section: HTMLElement }[] = [];
+  const sections: { tab: HTMLButtonElement; section: HTMLElement; paint: () => void }[] = [];
+  let active = 0;
 
   const show = (index: number) => {
+    active = index;
     sections.forEach(({ tab, section }, i) => {
       tab.ariaSelected = String(i === index);
       section.hidden = i !== index;
@@ -109,195 +120,315 @@ export function createEditor(
     tab.addEventListener('click', () => show(index));
     const grid = document.createElement('div');
     grid.role = 'tabpanel';
-    grid.className = 'grid grid-cols-[6rem_auto] items-center gap-x-3 gap-y-2 text-sm';
+    grid.className = 'grid grid-cols-[6rem_auto] items-start gap-x-3 gap-y-3 text-sm';
     tabs.append(tab);
     panel.append(grid);
-    sections.push({ tab, section: grid });
-    return (label: string, field: HTMLElement) => {
-      const text = document.createElement('label');
-      text.className = LABEL;
-      text.textContent = label;
-      grid.append(text, field);
+    const entry = { tab, section: grid, paint: () => {} };
+    sections.push(entry);
+    return {
+      row: (label: string, field: HTMLElement) => {
+        const text = document.createElement('label');
+        text.className = `${LABEL} pt-1`;
+        text.textContent = label;
+        grid.append(text, field);
+      },
+      paintWith: (paint: () => void) => {
+        entry.paint = paint;
+      },
     };
   };
 
+  const bare = (): Parts => ({ male: outfit.male, skin: outfit.skin, eyeColor: outfit.eyeColor });
+
   const body = section('Body');
-  const skins = document.createElement('div');
-  skins.className = 'grid grid-cols-8 gap-2';
-  const skinOptions = Array.from({ length: catalog.skinTones.count }, (_, skin) => {
-    const thumbnail = document.createElement('canvas');
-    thumbnail.className = 'h-16 w-8 [image-rendering:pixelated]';
-    const button = optionButton(`Skin ${skin + 1}`, String(skin + 1), thumbnail, () => {
-      outfit.skin = skin;
-      syncSkins();
-    });
-    skins.append(button);
-    return { button, thumbnail };
-  });
-  const syncSkins = () => {
-    skinOptions.forEach(({ button }, skin) => (button.ariaPressed = String(skin === outfit.skin)));
-  };
-  syncSkins();
-  body('Skin', skins);
-  body(
+  const skinPictures = Array.from({ length: catalog.skinTones.count }, () => thumbnail('h-16 w-8'));
+  body.row(
+    'Skin',
+    choiceGrid(
+      skinPictures.map((picture, skin) => ({ value: skin, label: String(skin + 1), picture })),
+      'grid-cols-8',
+      () => outfit.skin,
+      (skin) => (outfit.skin = skin),
+    ),
+  );
+  body.row(
     'Eyes',
     colorInput(outfit.eyeColor, (value) => {
       outfit.eyeColor = value;
     }),
   );
-
-  const accessories = document.createElement('div');
-  accessories.className = 'grid grid-cols-8 gap-2';
-  const none = document.createElement('span');
-  none.innerHTML = NONE_ICON;
-  const caption = document.createElement('p');
-  caption.className = 'font-semibold';
-  const accessoryNumber = (id: number | null) => String(id === null ? 1 : id + 2);
-  const accessoryName = (id: number | null) => (id === null ? 'None' : (ACCESSORY_NAMES[id] ?? `Accessory ${id + 2}`));
-  const describe = (id: number | null) => {
-    caption.textContent = `${accessoryNumber(id)} · ${accessoryName(id)}`;
-  };
-  const accessoryOption = (id: number | null, picture: HTMLElement) => {
-    const button = optionButton(`${accessoryNumber(id)}: ${accessoryName(id)}`, accessoryNumber(id), picture, () => pickAccessory(id));
-    button.title = accessoryName(id);
-    for (const show of ['mouseenter', 'focus']) button.addEventListener(show, () => describe(id));
-    for (const hide of ['mouseleave', 'blur']) button.addEventListener(hide, () => describe(outfit.accessory));
-    return button;
-  };
-  const accessoryOptions = [
-    { id: null, thumbnail: null, button: accessoryOption(null, none) },
-    ...catalog.accessories.map(({ id }) => {
-      const thumbnail = document.createElement('canvas');
-      thumbnail.className = 'h-10 w-8 [image-rendering:pixelated]';
-      return { id, thumbnail, button: accessoryOption(id, thumbnail) };
-    }),
-  ];
-  const pickAccessory = (id: number | null) => {
-    outfit.accessory = id;
-    accessoryOptions.forEach((option) => (option.button.ariaPressed = String(option.id === outfit.accessory)));
-    describe(id);
-  };
-  pickAccessory(outfit.accessory);
-  accessories.append(...accessoryOptions.map(({ button }) => button));
-  const accessoryField = document.createElement('div');
-  accessoryField.className = 'flex flex-col gap-2';
-  accessoryField.append(accessories, caption);
-  body('Accessory', accessoryField);
-
-  let skinsDrawnFor = '';
-  let accessoriesDrawnFor = '';
-  const refresh = () => {
-    const skinKey = JSON.stringify([outfit.male, outfit.eyeColor]);
-    if (skinKey !== skinsDrawnFor) {
-      skinsDrawnFor = skinKey;
-      skinOptions.forEach(({ thumbnail }, skin) => paint(thumbnail, renderer.renderBare(outfit.male, skin, outfit.eyeColor)));
-    }
-    const accessoryKey = JSON.stringify([outfit.male, outfit.skin, outfit.eyeColor, outfit.hairColor]);
-    if (accessoryKey !== accessoriesDrawnFor) {
-      accessoriesDrawnFor = accessoryKey;
-      for (const { id, thumbnail } of accessoryOptions) {
-        if (id === null || !thumbnail) continue;
-        const surface = renderer.renderBare(outfit.male, outfit.skin, outfit.eyeColor, { id, hairColor: outfit.hairColor });
-        paint(thumbnail, surface, BUST_ROWS * SCALE);
-      }
-    }
-  };
+  const accessoryPictures = catalog.accessories.map(() => thumbnail('h-10 w-8'));
+  body.row(
+    'Accessory',
+    choiceGrid<number | null>(
+      [
+        { value: null, label: '1', caption: '1 · None', picture: noneIcon('h-10 w-8') },
+        ...catalog.accessories.map(({ id }, i) => ({
+          value: id,
+          label: String(id + 2),
+          caption: `${id + 2} · ${ACCESSORY_NAMES[id] ?? 'Accessory'}`,
+          picture: accessoryPictures[i],
+        })),
+      ],
+      'grid-cols-8',
+      () => outfit.accessory,
+      (id) => (outfit.accessory = id),
+      'Names are unofficial: the game only gives accessories a number.',
+    ),
+  );
+  const paintSkins = whenChanged(
+    () => [outfit.male, outfit.eyeColor],
+    () => skinPictures.forEach((picture, skin) => paint(picture, renderer.render({ ...bare(), skin }), FULL_BODY)),
+  );
+  const paintAccessories = whenChanged(
+    () => [outfit.male, outfit.skin, outfit.eyeColor, outfit.hairColor],
+    () =>
+      catalog.accessories.forEach(({ id }, i) =>
+        paint(accessoryPictures[i], renderer.render({ ...bare(), accessory: id, hairColor: outfit.hairColor }), BUST),
+      ),
+  );
+  body.paintWith(() => {
+    paintSkins();
+    paintAccessories();
+  });
 
   const hair = section('Hair');
-  const hairstyles: Options = catalog.hairstyles.map((style, i) => [String(style.id), String(i + 1)]);
-  hair(
+  const hairPictures = catalog.hairstyles.map(() => thumbnail('h-12 w-8'));
+  hair.row(
     'Style',
-    select(hairstyles, String(outfit.hairstyle), (value) => {
-      outfit.hairstyle = Number(value);
-    }),
+    choiceGrid(
+      catalog.hairstyles.map((style, i) => ({ value: style.id, label: String(i + 1), picture: hairPictures[i] })),
+      'grid-cols-8',
+      () => outfit.hairstyle,
+      (id) => (outfit.hairstyle = id),
+    ),
   );
-  hair(
+  hair.row(
     'Colour',
     colorInput(outfit.hairColor, (value) => {
       outfit.hairColor = value;
     }),
+  );
+  hair.paintWith(
+    whenChanged(
+      () => [outfit.male, outfit.skin, outfit.eyeColor, outfit.hairColor],
+      () =>
+        catalog.hairstyles.forEach((style, i) =>
+          paint(hairPictures[i], renderer.render({ ...bare(), hairstyle: style.id, hairColor: outfit.hairColor }), HEAD),
+        ),
+    ),
   );
 
   const shirt = section('Shirt');
   const shirtColor = colorInput(outfit.shirtColor, (value) => {
     outfit.shirtColor = value;
   });
-  const syncShirt = () => {
+  const syncShirtColor = () => {
     shirtColor.disabled = !catalog.shirts.find((item) => item.id === outfit.shirt)?.dyeable;
     shirtColor.value = toHex(outfit.shirtColor);
   };
-  shirt(
+  const shirtPictures = catalog.shirts.map(() => thumbnail('h-12 w-12'));
+  shirt.row(
     'Style',
-    select(itemOptions(catalog.shirts), outfit.shirt, (value) => {
-      outfit.shirt = value;
-      outfit.shirtColor = catalog.shirts.find((item) => item.id === value)?.color ?? outfit.shirtColor;
-      syncShirt();
-    }),
+    choiceGrid(
+      catalog.shirts.map((item, i) => {
+        const number = item.creation ? String((item.sprite.y / 32) * 16 + item.sprite.x / 8 + 1) : '';
+        return { value: item.id, label: number, caption: newGameCaption(item.name, number), picture: shirtPictures[i] };
+      }),
+      'grid-cols-6',
+      () => outfit.shirt,
+      (id) => {
+        outfit.shirt = id;
+        outfit.shirtColor = catalog.shirts.find((item) => item.id === id)?.color ?? outfit.shirtColor;
+        syncShirtColor();
+      },
+    ),
   );
-  shirt('Colour', shirtColor);
-  syncShirt();
+  shirt.row('Colour', shirtColor);
+  syncShirtColor();
+  shirt.paintWith(
+    whenChanged(
+      () => [outfit.male, outfit.skin],
+      () => catalog.shirts.forEach((item, i) => paint(shirtPictures[i], renderer.render({ ...bare(), shirt: item.id }), TORSO)),
+    ),
+  );
 
   const pants = section('Pants');
   const pantsColor = colorInput(outfit.pantsColor, (value) => {
     outfit.pantsColor = value;
   });
-  const syncPants = () => {
+  const syncPantsColor = () => {
     pantsColor.disabled = !catalog.pants.find((item) => item.id === outfit.pants)?.dyeable;
     pantsColor.value = toHex(outfit.pantsColor);
   };
-  pants(
+  const pantsPictures = catalog.pants.map(() => thumbnail('h-12 w-12'));
+  pants.row(
     'Style',
-    select(itemOptions(catalog.pants), outfit.pants, (value) => {
-      outfit.pants = value;
-      outfit.pantsColor = catalog.pants.find((item) => item.id === value)?.color ?? outfit.pantsColor;
-      syncPants();
-    }),
+    choiceGrid(
+      catalog.pants.map((item, i) => {
+        const number = item.creation ? String((item.sprite.y / 688) * 10 + item.sprite.x / 192 + 1) : '';
+        return { value: item.id, label: number, caption: newGameCaption(item.name, number), picture: pantsPictures[i] };
+      }),
+      'grid-cols-6',
+      () => outfit.pants,
+      (id) => {
+        outfit.pants = id;
+        outfit.pantsColor = catalog.pants.find((item) => item.id === id)?.color ?? outfit.pantsColor;
+        syncPantsColor();
+      },
+    ),
   );
-  pants('Colour', pantsColor);
-  syncPants();
-
-  section('Hat')(
-    'Style',
-    select([['', 'None'], ...itemOptions(catalog.hats)], outfit.hat ?? '', (value) => {
-      outfit.hat = value === '' ? null : value;
-    }),
+  pants.row('Colour', pantsColor);
+  syncPantsColor();
+  pants.paintWith(
+    whenChanged(
+      () => [outfit.male, outfit.skin],
+      () => catalog.pants.forEach((item, i) => paint(pantsPictures[i], renderer.render({ ...bare(), pants: item.id }), LEGS)),
+    ),
   );
 
-  section('Boots')(
+  const hat = section('Hat');
+  const hatPictures = catalog.hats.map(() => thumbnail('h-10 w-10'));
+  hat.row(
     'Style',
-    select([['', 'None'], ...itemOptions(catalog.boots)], outfit.boots ?? '', (value) => {
-      outfit.boots = value === '' ? null : value;
-    }),
+    choiceGrid<string | null>(
+      [
+        { value: null, caption: 'None', picture: noneIcon('h-10 w-10') },
+        ...catalog.hats.map((item, i) => ({ value: item.id, caption: item.name, picture: hatPictures[i] })),
+      ],
+      'grid-cols-7',
+      () => outfit.hat,
+      (id) => (outfit.hat = id),
+    ),
+  );
+  hat.paintWith(
+    whenChanged(
+      () => [],
+      () => catalog.hats.forEach((item, i) => paint(hatPictures[i], renderer.renderHat(item.id), WHOLE_HAT)),
+    ),
+  );
+
+  const boots = section('Boots');
+  const bootsPictures = catalog.boots.map(() => thumbnail('h-6 w-12'));
+  boots.row(
+    'Style',
+    choiceGrid<string | null>(
+      [
+        { value: null, caption: 'None', picture: noneIcon('h-6 w-12') },
+        ...catalog.boots.map((item, i) => ({ value: item.id, caption: item.name, picture: bootsPictures[i] })),
+      ],
+      'grid-cols-6',
+      () => outfit.boots,
+      (id) => (outfit.boots = id),
+    ),
+  );
+  boots.paintWith(
+    whenChanged(
+      () => [outfit.male, outfit.skin],
+      () => catalog.boots.forEach((item, i) => paint(bootsPictures[i], renderer.render({ ...bare(), boots: item.id }), FEET)),
+    ),
   );
 
   show(0);
-  return { tabs, panel, refresh };
+  return { tabs, panel, refresh: () => sections[active].paint() };
 }
 
-function optionButton(label: string, number: string, picture: HTMLElement, onClick: () => void): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.ariaLabel = label;
-  button.className = OPTION;
-  const text = document.createElement('span');
-  text.textContent = number;
-  button.append(picture, text);
-  button.addEventListener('click', onClick);
-  return button;
+function choiceGrid<T>(
+  choices: Choice<T>[],
+  columns: string,
+  selected: () => T,
+  pick: (value: T) => void,
+  note?: string,
+): HTMLElement {
+  const field = document.createElement('div');
+  field.className = 'flex flex-col gap-2';
+  const grid = document.createElement('div');
+  grid.className = `grid ${columns} gap-2 ${choices.length > 40 ? 'max-h-96 overflow-y-auto p-1' : ''}`;
+  const labelled = choices.some((choice) => choice.label);
+  const captioned = choices.some((choice) => choice.caption);
+  const caption = document.createElement('p');
+  caption.className = 'font-semibold';
+  const describe = (value: T) => {
+    caption.textContent = choices.find((choice) => choice.value === value)?.caption ?? '';
+  };
+
+  const buttons = choices.map((choice) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = OPTION;
+    button.ariaLabel = choice.caption ?? choice.label ?? '';
+    if (choice.caption) button.title = choice.caption;
+    button.append(choice.picture);
+    if (labelled) {
+      const text = document.createElement('span');
+      text.textContent = choice.label || ' ';
+      button.append(text);
+    }
+    button.addEventListener('click', () => {
+      pick(choice.value);
+      sync();
+    });
+    if (captioned) {
+      for (const event of ['mouseenter', 'focus']) button.addEventListener(event, () => describe(choice.value));
+      for (const event of ['mouseleave', 'blur']) button.addEventListener(event, () => describe(selected()));
+    }
+    grid.append(button);
+    return button;
+  });
+
+  const sync = () => {
+    buttons.forEach((button, i) => (button.ariaPressed = String(choices[i].value === selected())));
+    if (captioned) describe(selected());
+  };
+  sync();
+
+  field.append(grid);
+  if (captioned) field.append(caption);
+  if (note) {
+    const text = document.createElement('p');
+    text.className = 'text-xs italic text-black/60';
+    text.textContent = note;
+    field.append(text);
+  }
+  return field;
 }
 
-function paint(canvas: HTMLCanvasElement, surface: Surface, height = surface.height): void {
-  canvas.width = surface.width;
-  canvas.height = height;
-  canvas.getContext('2d')!.putImageData(new ImageData(surface.toStraightAlpha(), surface.width, surface.height), 0, 0);
+function newGameCaption(name: string, number: string): string {
+  return number ? `${name} · new game #${number}` : name;
 }
 
-function select(options: Options, value: string, onChange: (value: string) => void): HTMLSelectElement {
-  const element = document.createElement('select');
-  element.className = FIELD;
-  for (const [optionValue, label] of options) element.add(new Option(label, optionValue, false, optionValue === value));
-  element.addEventListener('change', () => onChange(element.value));
-  return element;
+function bodyArea(left: number, top: number, width: number, height: number): Rect {
+  return { x: BODY_X + left * SCALE, y: BODY_Y + top * SCALE, width: width * SCALE, height: height * SCALE };
+}
+
+function thumbnail(size: string): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.className = `${size} [image-rendering:pixelated]`;
+  return canvas;
+}
+
+function noneIcon(size: string): HTMLElement {
+  const icon = document.createElement('span');
+  icon.className = `${size} text-gray-500`;
+  icon.innerHTML =
+    '<svg viewBox="0 0 24 24" class="h-full w-full" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/></svg>';
+  return icon;
+}
+
+function paint(canvas: HTMLCanvasElement, surface: Surface, area: Rect): void {
+  canvas.width = area.width;
+  canvas.height = area.height;
+  canvas.getContext('2d')!.putImageData(new ImageData(surface.toStraightAlpha(), surface.width, surface.height), -area.x, -area.y);
+}
+
+function whenChanged(key: () => unknown[], draw: () => void): () => void {
+  let drawnFor: string | null = null;
+  return () => {
+    const next = JSON.stringify(key());
+    if (next === drawnFor) return;
+    drawnFor = next;
+    draw();
+  };
 }
 
 function colorInput(value: Rgb, onChange: (value: Rgb) => void): HTMLInputElement {
@@ -307,12 +438,6 @@ function colorInput(value: Rgb, onChange: (value: Rgb) => void): HTMLInputElemen
   element.className = 'h-8 w-10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30';
   element.addEventListener('input', () => onChange(fromHex(element.value)));
   return element;
-}
-
-function itemOptions(items: { id: string; name: string }[]): Options {
-  const counts = new Map<string, number>();
-  for (const { name } of items) counts.set(name, (counts.get(name) ?? 0) + 1);
-  return items.map(({ id, name }) => [id, (counts.get(name) ?? 0) > 1 ? `${name} (${id})` : name]);
 }
 
 function toHex(color: Rgb): string {
