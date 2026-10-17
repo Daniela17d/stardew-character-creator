@@ -4,8 +4,6 @@ import { loadCatalog } from './catalog/load.ts';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const catalog = await loadCatalog();
 
-const heading = document.createElement('h1');
-heading.textContent = 'Stardew Character Creator';
 const source = document.createElement('p');
 source.textContent = `Data from Stardew Valley ${catalog.gameVersion}`;
 
@@ -24,4 +22,4 @@ for (const [label, count] of [
   list.append(item);
 }
 
-app.append(heading, source, list);
+app.append(source, list);
