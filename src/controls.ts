@@ -13,6 +13,8 @@ type Options = [value: string, label: string][];
 const FIELD = 'w-56 rounded border border-black/20 bg-white px-2 py-1';
 const LABEL = 'font-semibold';
 const BUTTON = 'rounded border border-black/20 bg-white hover:bg-white/70 aria-pressed:bg-black aria-pressed:text-white';
+const TAB =
+  'rounded border border-black/20 bg-white px-4 py-1 font-semibold hover:bg-white/70 aria-selected:border-[#8B4513] aria-selected:bg-[#8B4513] aria-selected:text-white';
 
 const FACING: Direction[] = ['up', 'right', 'down', 'left'];
 
@@ -54,117 +56,148 @@ export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTML
   syncGender();
   genders.append(...genderButtons);
 
-  preview.append(frame, genders);
+  const walk = document.createElement('label');
+  walk.className = 'flex items-center gap-2 text-sm font-semibold';
+  const walkBox = document.createElement('input');
+  walkBox.type = 'checkbox';
+  walkBox.className = 'h-4 w-4';
+  walkBox.checked = state.walking;
+  walkBox.addEventListener('change', () => {
+    state.walking = walkBox.checked;
+  });
+  walk.append(walkBox, 'Walk');
+
+  preview.append(frame, genders, walk);
   return preview;
 }
 
-export function createControls(catalog: Catalog, state: ViewState): HTMLElement {
+export function createEditor(catalog: Catalog, state: ViewState): { tabs: HTMLElement; panel: HTMLElement } {
   const { outfit } = state;
-  const form = document.createElement('form');
-  form.className = 'grid grid-cols-[auto_auto_auto] items-center gap-x-3 gap-y-2 text-sm';
-  form.addEventListener('submit', (event) => event.preventDefault());
+  const tabs = document.createElement('nav');
+  tabs.role = 'tablist';
+  tabs.className = 'flex flex-wrap justify-center gap-2 border-b-2 border-[#8B4513] pb-4';
+  const panel = document.createElement('div');
+  panel.className = 'min-w-80';
+  const sections: { tab: HTMLButtonElement; section: HTMLElement }[] = [];
 
-  const row = (label: string, field: HTMLElement, extra?: HTMLElement) => {
-    const text = document.createElement('label');
-    text.className = LABEL;
-    text.textContent = label;
-    form.append(text, field, extra ?? document.createElement('span'));
+  const show = (index: number) => {
+    sections.forEach(({ tab, section }, i) => {
+      tab.ariaSelected = String(i === index);
+      section.hidden = i !== index;
+    });
   };
 
-  row(
+  const section = (name: string) => {
+    const index = sections.length;
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.role = 'tab';
+    tab.textContent = name;
+    tab.className = TAB;
+    tab.addEventListener('click', () => show(index));
+    const grid = document.createElement('div');
+    grid.role = 'tabpanel';
+    grid.className = 'grid grid-cols-[6rem_auto] items-center gap-x-3 gap-y-2 text-sm';
+    tabs.append(tab);
+    panel.append(grid);
+    sections.push({ tab, section: grid });
+    return (label: string, field: HTMLElement) => {
+      const text = document.createElement('label');
+      text.className = LABEL;
+      text.textContent = label;
+      grid.append(text, field);
+    };
+  };
+
+  const body = section('Body');
+  body(
     'Skin',
     select(range(catalog.skinTones.count, 0), String(outfit.skin), (value) => {
       outfit.skin = Number(value);
     }),
   );
-
-  row(
+  body(
     'Eyes',
     colorInput(outfit.eyeColor, (value) => {
       outfit.eyeColor = value;
     }),
   );
-
-  const hairstyles: Options = catalog.hairstyles.map((style, i) => [String(style.id), String(i + 1)]);
-  row(
-    'Hairstyle',
-    select(hairstyles, String(outfit.hairstyle), (value) => {
-      outfit.hairstyle = Number(value);
-    }),
-    colorInput(outfit.hairColor, (value) => {
-      outfit.hairColor = value;
-    }),
-  );
-
-  row(
+  body(
     'Accessory',
     select([['', 'None'], ...range(catalog.accessories.length, 0)], String(outfit.accessory ?? ''), (value) => {
       outfit.accessory = value === '' ? null : Number(value);
     }),
   );
 
+  const hair = section('Hair');
+  const hairstyles: Options = catalog.hairstyles.map((style, i) => [String(style.id), String(i + 1)]);
+  hair(
+    'Style',
+    select(hairstyles, String(outfit.hairstyle), (value) => {
+      outfit.hairstyle = Number(value);
+    }),
+  );
+  hair(
+    'Colour',
+    colorInput(outfit.hairColor, (value) => {
+      outfit.hairColor = value;
+    }),
+  );
+
+  const shirt = section('Shirt');
   const shirtColor = colorInput(outfit.shirtColor, (value) => {
     outfit.shirtColor = value;
   });
   const syncShirt = () => {
-    const shirt = catalog.shirts.find((item) => item.id === outfit.shirt);
-    shirtColor.disabled = !shirt?.dyeable;
+    shirtColor.disabled = !catalog.shirts.find((item) => item.id === outfit.shirt)?.dyeable;
     shirtColor.value = toHex(outfit.shirtColor);
   };
-  row(
-    'Shirt',
+  shirt(
+    'Style',
     select(itemOptions(catalog.shirts), outfit.shirt, (value) => {
       outfit.shirt = value;
       outfit.shirtColor = catalog.shirts.find((item) => item.id === value)?.color ?? outfit.shirtColor;
       syncShirt();
     }),
-    shirtColor,
   );
+  shirt('Colour', shirtColor);
   syncShirt();
 
+  const pants = section('Pants');
   const pantsColor = colorInput(outfit.pantsColor, (value) => {
     outfit.pantsColor = value;
   });
   const syncPants = () => {
-    const pants = catalog.pants.find((item) => item.id === outfit.pants);
-    pantsColor.disabled = !pants?.dyeable;
+    pantsColor.disabled = !catalog.pants.find((item) => item.id === outfit.pants)?.dyeable;
     pantsColor.value = toHex(outfit.pantsColor);
   };
-  row(
-    'Pants',
+  pants(
+    'Style',
     select(itemOptions(catalog.pants), outfit.pants, (value) => {
       outfit.pants = value;
       outfit.pantsColor = catalog.pants.find((item) => item.id === value)?.color ?? outfit.pantsColor;
       syncPants();
     }),
-    pantsColor,
   );
+  pants('Colour', pantsColor);
   syncPants();
 
-  row(
-    'Hat',
+  section('Hat')(
+    'Style',
     select([['', 'None'], ...itemOptions(catalog.hats)], outfit.hat ?? '', (value) => {
       outfit.hat = value === '' ? null : value;
     }),
   );
 
-  row(
-    'Boots',
+  section('Boots')(
+    'Style',
     select([['', 'None'], ...itemOptions(catalog.boots)], outfit.boots ?? '', (value) => {
       outfit.boots = value === '' ? null : value;
     }),
   );
 
-  const walk = document.createElement('input');
-  walk.type = 'checkbox';
-  walk.className = 'h-4 w-4';
-  walk.checked = state.walking;
-  walk.addEventListener('change', () => {
-    state.walking = walk.checked;
-  });
-  row('Walk', walk);
-
-  return form;
+  show(0);
+  return { tabs, panel };
 }
 
 function select(options: Options, value: string, onChange: (value: string) => void): HTMLSelectElement {

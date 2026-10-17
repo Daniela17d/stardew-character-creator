@@ -1,5 +1,5 @@
 import { loadCatalog } from './catalog/load.ts';
-import { createControls, createPreview, type ViewState } from './controls.ts';
+import { createEditor, createPreview, type ViewState } from './controls.ts';
 import { newFarmer } from './outfit.ts';
 import { IDLE, WALK, WALK_FRAME_MS } from './render/animation.ts';
 import { FRAME_HEIGHT, FRAME_WIDTH, FarmerRenderer } from './render/farmer.ts';
@@ -17,7 +17,11 @@ canvas.height = FRAME_HEIGHT;
 canvas.className = 'h-[288px] w-[160px] [image-rendering:pixelated]';
 const context = canvas.getContext('2d')!;
 
-app.append(createPreview(canvas, state), createControls(catalog, state));
+const { tabs, panel } = createEditor(catalog, state);
+const content = document.createElement('div');
+content.className = 'flex flex-col items-center gap-8 md:flex-row md:items-start';
+content.append(createPreview(canvas, state), panel);
+app.append(tabs, content);
 
 let lastDrawn = '';
 
