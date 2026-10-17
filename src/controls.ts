@@ -12,6 +12,51 @@ type Options = [value: string, label: string][];
 
 const FIELD = 'w-56 rounded border border-black/20 bg-white px-2 py-1';
 const LABEL = 'font-semibold';
+const BUTTON = 'rounded border border-black/20 bg-white hover:bg-white/70 aria-pressed:bg-black aria-pressed:text-white';
+
+const FACING: Direction[] = ['up', 'right', 'down', 'left'];
+
+export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTMLElement {
+  const preview = document.createElement('div');
+  preview.className = 'flex flex-col items-center gap-3';
+
+  const frame = document.createElement('div');
+  frame.className = 'relative rounded-lg border-4 border-[#8B4513] px-4 pt-4 pb-12';
+  const rotate = (label: string, arrow: string, position: string, turn: number) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = arrow;
+    button.ariaLabel = label;
+    button.className = `absolute bottom-2 ${position} h-8 w-8 ${BUTTON}`;
+    button.addEventListener('click', () => {
+      state.direction = FACING[(FACING.indexOf(state.direction) + turn) % FACING.length];
+    });
+    return button;
+  };
+  frame.append(canvas, rotate('Rotate left', '◀', 'left-2', 1), rotate('Rotate right', '▶', 'right-2', 3));
+
+  const genders = document.createElement('div');
+  genders.className = 'flex gap-2';
+  const genderButtons = (['Male', 'Female'] as const).map((label) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.className = `px-4 py-1 ${BUTTON}`;
+    button.addEventListener('click', () => {
+      state.outfit.male = label === 'Male';
+      syncGender();
+    });
+    return button;
+  });
+  const syncGender = () => {
+    genderButtons.forEach((button, i) => (button.ariaPressed = String(state.outfit.male === (i === 0))));
+  };
+  syncGender();
+  genders.append(...genderButtons);
+
+  preview.append(frame, genders);
+  return preview;
+}
 
 export function createControls(catalog: Catalog, state: ViewState): HTMLElement {
   const { outfit } = state;
@@ -25,13 +70,6 @@ export function createControls(catalog: Catalog, state: ViewState): HTMLElement 
     text.textContent = label;
     form.append(text, field, extra ?? document.createElement('span'));
   };
-
-  row(
-    'Body',
-    select([['male', 'Male'], ['female', 'Female']], outfit.male ? 'male' : 'female', (value) => {
-      outfit.male = value === 'male';
-    }),
-  );
 
   row(
     'Skin',
@@ -117,34 +155,14 @@ export function createControls(catalog: Catalog, state: ViewState): HTMLElement 
     }),
   );
 
-  const directions = document.createElement('div');
-  directions.className = 'flex gap-1';
-  const buttons = new Map<Direction, HTMLButtonElement>();
-  for (const [direction, arrow] of [['left', '←'], ['down', '↓'], ['up', '↑'], ['right', '→']] as const) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = arrow;
-    button.ariaLabel = `Face ${direction}`;
-    button.className = 'h-8 w-10 rounded border border-black/20 bg-white aria-pressed:bg-black aria-pressed:text-white';
-    button.addEventListener('click', () => {
-      state.direction = direction;
-      for (const [other, otherButton] of buttons) otherButton.ariaPressed = String(other === direction);
-    });
-    button.ariaPressed = String(direction === state.direction);
-    buttons.set(direction, button);
-    directions.append(button);
-  }
-
-  const walk = document.createElement('label');
-  walk.className = 'flex items-center gap-1';
-  const walkBox = document.createElement('input');
-  walkBox.type = 'checkbox';
-  walkBox.checked = state.walking;
-  walkBox.addEventListener('change', () => {
-    state.walking = walkBox.checked;
+  const walk = document.createElement('input');
+  walk.type = 'checkbox';
+  walk.className = 'h-4 w-4';
+  walk.checked = state.walking;
+  walk.addEventListener('change', () => {
+    state.walking = walk.checked;
   });
-  walk.append(walkBox, 'Walk');
-  row('Direction', directions, walk);
+  row('Walk', walk);
 
   return form;
 }

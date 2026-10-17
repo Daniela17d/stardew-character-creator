@@ -1,5 +1,5 @@
 import { loadCatalog } from './catalog/load.ts';
-import { createControls, type ViewState } from './controls.ts';
+import { createControls, createPreview, type ViewState } from './controls.ts';
 import { newFarmer } from './outfit.ts';
 import { IDLE, WALK, WALK_FRAME_MS } from './render/animation.ts';
 import { FRAME_HEIGHT, FRAME_WIDTH, FarmerRenderer } from './render/farmer.ts';
@@ -17,7 +17,7 @@ canvas.height = FRAME_HEIGHT;
 canvas.className = 'h-[288px] w-[160px] [image-rendering:pixelated]';
 const context = canvas.getContext('2d')!;
 
-app.append(canvas, createControls(catalog, state));
+app.append(createPreview(canvas, state), createControls(catalog, state));
 
 let lastDrawn = '';
 
