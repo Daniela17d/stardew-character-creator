@@ -187,7 +187,33 @@ export class FarmerRenderer {
     return item;
   }
 
-  private recolorBody(texture: string, outfit: Outfit, shirt: Shirt, sleeveColor: Rgb, boots: Boots | undefined): Pixels {
+  renderBare(male: boolean, skin: number, eyeColor: Rgb, accessory?: { id: number; hairColor: Rgb }): Surface {
+    const texture = this.catalog.bodies[male ? 'male' : 'female'].base;
+    const body = this.recolorBody(texture, { skin, eyeColor }, undefined, WHITE, undefined);
+    const sprite: Rect = { x: 0, y: 0, width: 16, height: 32 };
+    const surface = new Surface(sprite.width * SCALE, sprite.height * SCALE);
+    surface.draw(body, sprite, 0, 0);
+    if (accessory) {
+      const { sprite: cell, facialHair } = this.catalog.accessories[accessory.id];
+      surface.draw(
+        this.textures[cell.texture],
+        { x: cell.x, y: cell.y, width: 16, height: 16 },
+        0,
+        4 + FEATURE_Y_OFFSET[0] * SCALE + (male ? 0 : 4),
+        { tint: facialHair ? accessory.hairColor : WHITE },
+      );
+    }
+    surface.draw(body, { ...sprite, x: 96 }, 0, 0);
+    return surface;
+  }
+
+  private recolorBody(
+    texture: string,
+    outfit: Pick<Outfit, 'skin' | 'eyeColor'>,
+    shirt: Shirt | undefined,
+    sleeveColor: Rgb,
+    boots: Boots | undefined,
+  ): Pixels {
     const { skinTones, shoeColors } = this.catalog;
     const skin = this.paletteRow(skinTones.texture, outfit.skin, 3);
     const shoes = boots
@@ -197,7 +223,7 @@ export class FarmerRenderer {
       [EYE_KEYS, eyeColors(outfit.eyeColor)],
       [SKIN_KEYS, skin],
       [SHOE_KEYS, shoes],
-      [SLEEVE_KEYS, shirt.sleeves ? this.sleeveColors(shirt, sleeveColor) : skin],
+      [SLEEVE_KEYS, shirt?.sleeves ? this.sleeveColors(shirt, sleeveColor) : skin],
     ];
     const key = texture + JSON.stringify(swaps);
     if (this.body?.key === key) return this.body.pixels;

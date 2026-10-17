@@ -17,7 +17,7 @@ canvas.height = FRAME_HEIGHT;
 canvas.className = 'h-[288px] w-[160px] [image-rendering:pixelated]';
 const context = canvas.getContext('2d')!;
 
-const { tabs, panel } = createEditor(catalog, state);
+const { tabs, panel, refresh } = createEditor(catalog, state, renderer);
 const content = document.createElement('div');
 content.className = 'flex flex-col items-center gap-8 md:flex-row md:items-start';
 content.append(createPreview(canvas, state), panel);
@@ -26,6 +26,7 @@ app.append(tabs, content);
 let lastDrawn = '';
 
 function draw(time: number): void {
+  refresh();
   const frames = WALK[state.direction];
   const step = state.walking ? Math.floor(time / WALK_FRAME_MS) % frames.length : -1;
   const animated = renderer.isAnimated(state.outfit);

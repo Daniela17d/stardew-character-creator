@@ -1,6 +1,9 @@
+import { ACCESSORY_NAMES } from './accessory-names.ts';
 import type { Catalog, Rgb } from './catalog/types.ts';
 import type { Outfit } from './outfit.ts';
 import type { Direction } from './render/animation.ts';
+import type { FarmerRenderer } from './render/farmer.ts';
+import { SCALE, type Surface } from './render/pixels.ts';
 
 export interface ViewState {
   outfit: Outfit;
@@ -15,6 +18,11 @@ const LABEL = 'font-semibold';
 const BUTTON = 'rounded border border-black/20 bg-white hover:bg-white/70 aria-pressed:bg-black aria-pressed:text-white';
 const TAB =
   'rounded border border-black/20 bg-white px-4 py-1 font-semibold hover:bg-white/70 aria-selected:border-[#8B4513] aria-selected:bg-[#8B4513] aria-selected:text-white';
+const OPTION =
+  'flex flex-col items-center rounded border-2 border-transparent bg-white/50 p-1 text-xs font-semibold hover:bg-white aria-pressed:border-[#8B4513] aria-pressed:bg-white';
+const NONE_ICON =
+  '<svg viewBox="0 0 32 40" class="h-10 w-8 text-gray-500" fill="none" stroke="currentColor" stroke-width="3"><circle cx="16" cy="20" r="11"/><path d="M8.5 12.5l15 15"/></svg>';
+const BUST_ROWS = 20;
 
 const FACING: Direction[] = ['up', 'right', 'down', 'left'];
 
@@ -71,7 +79,11 @@ export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTML
   return preview;
 }
 
-export function createEditor(catalog: Catalog, state: ViewState): { tabs: HTMLElement; panel: HTMLElement } {
+export function createEditor(
+  catalog: Catalog,
+  state: ViewState,
+  renderer: FarmerRenderer,
+): { tabs: HTMLElement; panel: HTMLElement; refresh: () => void } {
   const { outfit } = state;
   const tabs = document.createElement('nav');
   tabs.role = 'tablist';
@@ -110,24 +122,86 @@ export function createEditor(catalog: Catalog, state: ViewState): { tabs: HTMLEl
   };
 
   const body = section('Body');
-  body(
-    'Skin',
-    select(range(catalog.skinTones.count, 0), String(outfit.skin), (value) => {
-      outfit.skin = Number(value);
-    }),
-  );
+  const skins = document.createElement('div');
+  skins.className = 'grid grid-cols-8 gap-2';
+  const skinOptions = Array.from({ length: catalog.skinTones.count }, (_, skin) => {
+    const thumbnail = document.createElement('canvas');
+    thumbnail.className = 'h-16 w-8 [image-rendering:pixelated]';
+    const button = optionButton(`Skin ${skin + 1}`, String(skin + 1), thumbnail, () => {
+      outfit.skin = skin;
+      syncSkins();
+    });
+    skins.append(button);
+    return { button, thumbnail };
+  });
+  const syncSkins = () => {
+    skinOptions.forEach(({ button }, skin) => (button.ariaPressed = String(skin === outfit.skin)));
+  };
+  syncSkins();
+  body('Skin', skins);
   body(
     'Eyes',
     colorInput(outfit.eyeColor, (value) => {
       outfit.eyeColor = value;
     }),
   );
-  body(
-    'Accessory',
-    select([['', 'None'], ...range(catalog.accessories.length, 0)], String(outfit.accessory ?? ''), (value) => {
-      outfit.accessory = value === '' ? null : Number(value);
+
+  const accessories = document.createElement('div');
+  accessories.className = 'grid grid-cols-8 gap-2';
+  const none = document.createElement('span');
+  none.innerHTML = NONE_ICON;
+  const caption = document.createElement('p');
+  caption.className = 'font-semibold';
+  const accessoryNumber = (id: number | null) => String(id === null ? 1 : id + 2);
+  const accessoryName = (id: number | null) => (id === null ? 'None' : (ACCESSORY_NAMES[id] ?? `Accessory ${id + 2}`));
+  const describe = (id: number | null) => {
+    caption.textContent = `${accessoryNumber(id)} · ${accessoryName(id)}`;
+  };
+  const accessoryOption = (id: number | null, picture: HTMLElement) => {
+    const button = optionButton(`${accessoryNumber(id)}: ${accessoryName(id)}`, accessoryNumber(id), picture, () => pickAccessory(id));
+    button.title = accessoryName(id);
+    for (const show of ['mouseenter', 'focus']) button.addEventListener(show, () => describe(id));
+    for (const hide of ['mouseleave', 'blur']) button.addEventListener(hide, () => describe(outfit.accessory));
+    return button;
+  };
+  const accessoryOptions = [
+    { id: null, thumbnail: null, button: accessoryOption(null, none) },
+    ...catalog.accessories.map(({ id }) => {
+      const thumbnail = document.createElement('canvas');
+      thumbnail.className = 'h-10 w-8 [image-rendering:pixelated]';
+      return { id, thumbnail, button: accessoryOption(id, thumbnail) };
     }),
-  );
+  ];
+  const pickAccessory = (id: number | null) => {
+    outfit.accessory = id;
+    accessoryOptions.forEach((option) => (option.button.ariaPressed = String(option.id === outfit.accessory)));
+    describe(id);
+  };
+  pickAccessory(outfit.accessory);
+  accessories.append(...accessoryOptions.map(({ button }) => button));
+  const accessoryField = document.createElement('div');
+  accessoryField.className = 'flex flex-col gap-2';
+  accessoryField.append(accessories, caption);
+  body('Accessory', accessoryField);
+
+  let skinsDrawnFor = '';
+  let accessoriesDrawnFor = '';
+  const refresh = () => {
+    const skinKey = JSON.stringify([outfit.male, outfit.eyeColor]);
+    if (skinKey !== skinsDrawnFor) {
+      skinsDrawnFor = skinKey;
+      skinOptions.forEach(({ thumbnail }, skin) => paint(thumbnail, renderer.renderBare(outfit.male, skin, outfit.eyeColor)));
+    }
+    const accessoryKey = JSON.stringify([outfit.male, outfit.skin, outfit.eyeColor, outfit.hairColor]);
+    if (accessoryKey !== accessoriesDrawnFor) {
+      accessoriesDrawnFor = accessoryKey;
+      for (const { id, thumbnail } of accessoryOptions) {
+        if (id === null || !thumbnail) continue;
+        const surface = renderer.renderBare(outfit.male, outfit.skin, outfit.eyeColor, { id, hairColor: outfit.hairColor });
+        paint(thumbnail, surface, BUST_ROWS * SCALE);
+      }
+    }
+  };
 
   const hair = section('Hair');
   const hairstyles: Options = catalog.hairstyles.map((style, i) => [String(style.id), String(i + 1)]);
@@ -197,7 +271,25 @@ export function createEditor(catalog: Catalog, state: ViewState): { tabs: HTMLEl
   );
 
   show(0);
-  return { tabs, panel };
+  return { tabs, panel, refresh };
+}
+
+function optionButton(label: string, number: string, picture: HTMLElement, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.ariaLabel = label;
+  button.className = OPTION;
+  const text = document.createElement('span');
+  text.textContent = number;
+  button.append(picture, text);
+  button.addEventListener('click', onClick);
+  return button;
+}
+
+function paint(canvas: HTMLCanvasElement, surface: Surface, height = surface.height): void {
+  canvas.width = surface.width;
+  canvas.height = height;
+  canvas.getContext('2d')!.putImageData(new ImageData(surface.toStraightAlpha(), surface.width, surface.height), 0, 0);
 }
 
 function select(options: Options, value: string, onChange: (value: string) => void): HTMLSelectElement {
@@ -215,10 +307,6 @@ function colorInput(value: Rgb, onChange: (value: Rgb) => void): HTMLInputElemen
   element.className = 'h-8 w-10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30';
   element.addEventListener('input', () => onChange(fromHex(element.value)));
   return element;
-}
-
-function range(count: number, first: number): Options {
-  return Array.from({ length: count }, (_, i) => [String(first + i), String(i + 1)]);
 }
 
 function itemOptions(items: { id: string; name: string }[]): Options {
