@@ -139,6 +139,10 @@ export function createEditor(
   };
 
   const bare = (): Parts => ({ male: outfit.male, skin: outfit.skin, eyeColor: outfit.eyeColor });
+  const shirtNames = distinctNames(catalog.shirts);
+  const pantsNames = distinctNames(catalog.pants);
+  const hatNames = distinctNames(catalog.hats);
+  const bootsNames = distinctNames(catalog.boots);
 
   const body = section('Body');
   const skinPictures = Array.from({ length: catalog.skinTones.count }, () => thumbnail('h-16 w-8'));
@@ -233,7 +237,7 @@ export function createEditor(
     choiceGrid(
       catalog.shirts.map((item, i) => {
         const number = item.creation ? String((item.sprite.y / 32) * 16 + item.sprite.x / 8 + 1) : '';
-        return { value: item.id, label: number, caption: newGameCaption(item.name, number), picture: shirtPictures[i] };
+        return { value: item.id, label: number, caption: newGameCaption(shirtNames.get(item.id) ?? item.name, number), picture: shirtPictures[i] };
       }),
       'grid-cols-6',
       () => outfit.shirt,
@@ -267,7 +271,7 @@ export function createEditor(
     choiceGrid(
       catalog.pants.map((item, i) => {
         const number = item.creation ? String((item.sprite.y / 688) * 10 + item.sprite.x / 192 + 1) : '';
-        return { value: item.id, label: number, caption: newGameCaption(item.name, number), picture: pantsPictures[i] };
+        return { value: item.id, label: number, caption: newGameCaption(pantsNames.get(item.id) ?? item.name, number), picture: pantsPictures[i] };
       }),
       'grid-cols-6',
       () => outfit.pants,
@@ -294,7 +298,7 @@ export function createEditor(
     choiceGrid<string | null>(
       [
         { value: null, caption: 'None', picture: noneIcon('h-10 w-10') },
-        ...catalog.hats.map((item, i) => ({ value: item.id, caption: item.name, picture: hatPictures[i] })),
+        ...catalog.hats.map((item, i) => ({ value: item.id, caption: hatNames.get(item.id), picture: hatPictures[i] })),
       ],
       'grid-cols-7',
       () => outfit.hat,
@@ -315,7 +319,7 @@ export function createEditor(
     choiceGrid<string | null>(
       [
         { value: null, caption: 'None', picture: noneIcon('h-6 w-12') },
-        ...catalog.boots.map((item, i) => ({ value: item.id, caption: item.name, picture: bootsPictures[i] })),
+        ...catalog.boots.map((item, i) => ({ value: item.id, caption: bootsNames.get(item.id), picture: bootsPictures[i] })),
       ],
       'grid-cols-6',
       () => outfit.boots,
@@ -395,6 +399,12 @@ function choiceGrid<T>(
 
 function newGameCaption(name: string, number: string): string {
   return number ? `${name} · new game #${number}` : name;
+}
+
+function distinctNames(items: { id: string; name: string }[]): Map<string, string> {
+  const counts = new Map<string, number>();
+  for (const { name } of items) counts.set(name, (counts.get(name) ?? 0) + 1);
+  return new Map(items.map(({ id, name }) => [id, (counts.get(name) ?? 0) > 1 ? `${name} (${id})` : name]));
 }
 
 function bodyArea(left: number, top: number, width: number, height: number): Rect {
