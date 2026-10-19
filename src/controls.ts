@@ -1,9 +1,11 @@
 import { ACCESSORY_NAMES } from './accessory-names.ts';
 import type { Catalog, Rgb } from './catalog/types.ts';
+import { fromHex, toHex } from './color.ts';
 import type { Outfit } from './outfit.ts';
 import type { Direction } from './render/animation.ts';
 import { BODY_X, BODY_Y, type FarmerRenderer, type Parts } from './render/farmer.ts';
 import { SCALE, type Rect, type Surface } from './render/pixels.ts';
+import { VILLAGERS, villagerOutfit } from './villagers.ts';
 
 export interface ViewState {
   outfit: Outfit;
@@ -34,6 +36,7 @@ const FEET = bodyArea(0, 24, 16, 8);
 const WHOLE_HAT: Rect = { x: 0, y: 0, width: 20 * SCALE, height: 20 * SCALE };
 
 const FACING: Direction[] = ['up', 'right', 'down', 'left'];
+const OUTFIT_CHANGED = 'outfitchange';
 
 export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTMLElement {
   const preview = document.createElement('div');
@@ -71,6 +74,7 @@ export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTML
     genderButtons.forEach((button, i) => (button.ariaPressed = String(state.outfit.male === (i === 0))));
   };
   syncGender();
+  document.addEventListener(OUTFIT_CHANGED, syncGender);
   genders.append(...genderButtons);
 
   const walk = document.createElement('label');
@@ -157,9 +161,12 @@ export function createEditor(
   );
   body.row(
     'Eyes',
-    colorInput(outfit.eyeColor, (value) => {
-      outfit.eyeColor = value;
-    }),
+    colorInput(
+      () => outfit.eyeColor,
+      (value) => {
+        outfit.eyeColor = value;
+      },
+    ),
   );
   const accessoryPictures = catalog.accessories.map(() => thumbnail('h-10 w-8'));
   body.row(
@@ -209,9 +216,12 @@ export function createEditor(
   );
   hair.row(
     'Colour',
-    colorInput(outfit.hairColor, (value) => {
-      outfit.hairColor = value;
-    }),
+    colorInput(
+      () => outfit.hairColor,
+      (value) => {
+        outfit.hairColor = value;
+      },
+    ),
   );
   hair.paintWith(
     whenChanged(
@@ -224,13 +234,17 @@ export function createEditor(
   );
 
   const shirt = section('Shirt');
-  const shirtColor = colorInput(outfit.shirtColor, (value) => {
-    outfit.shirtColor = value;
-  });
+  const shirtColor = colorInput(
+    () => outfit.shirtColor,
+    (value) => {
+      outfit.shirtColor = value;
+    },
+  );
   const syncShirtColor = () => {
     shirtColor.disabled = !catalog.shirts.find((item) => item.id === outfit.shirt)?.dyeable;
     shirtColor.value = toHex(outfit.shirtColor);
   };
+  document.addEventListener(OUTFIT_CHANGED, syncShirtColor);
   const shirtPictures = catalog.shirts.map(() => thumbnail('h-12 w-12'));
   shirt.row(
     'Style',
@@ -258,13 +272,17 @@ export function createEditor(
   );
 
   const pants = section('Pants');
-  const pantsColor = colorInput(outfit.pantsColor, (value) => {
-    outfit.pantsColor = value;
-  });
+  const pantsColor = colorInput(
+    () => outfit.pantsColor,
+    (value) => {
+      outfit.pantsColor = value;
+    },
+  );
   const syncPantsColor = () => {
     pantsColor.disabled = !catalog.pants.find((item) => item.id === outfit.pants)?.dyeable;
     pantsColor.value = toHex(outfit.pantsColor);
   };
+  document.addEventListener(OUTFIT_CHANGED, syncPantsColor);
   const pantsPictures = catalog.pants.map(() => thumbnail('h-12 w-12'));
   pants.row(
     'Style',
@@ -333,6 +351,34 @@ export function createEditor(
     ),
   );
 
+  const villagers = section('Villagers');
+  const villagerPictures = VILLAGERS.map(() => thumbnail('h-16 w-8'));
+  let villager: string | null = null;
+  villagers.row(
+    'Villager',
+    choiceGrid<string | null>(
+      VILLAGERS.map((preset, i) => ({ value: preset.name, label: preset.name, picture: villagerPictures[i] })),
+      'grid-cols-6',
+      () => villager,
+      (name) => {
+        villager = name;
+        const preset = VILLAGERS.find((entry) => entry.name === name);
+        if (preset) Object.assign(outfit, villagerOutfit(catalog, preset, outfit));
+        document.dispatchEvent(new Event(OUTFIT_CHANGED));
+      },
+      'Looks based on my own interpretation of each character.',
+    ),
+  );
+  villagers.paintWith(
+    whenChanged(
+      () => [],
+      () =>
+        VILLAGERS.forEach((preset, i) =>
+          drawSprite(villagerPictures[i], `${import.meta.env.BASE_URL}assets/Characters/${preset.sprite}.png`),
+        ),
+    ),
+  );
+
   show(0);
   return { tabs, panel, refresh: () => sections[active].paint() };
 }
@@ -385,6 +431,7 @@ function choiceGrid<T>(
     if (captioned) describe(selected());
   };
   sync();
+  document.addEventListener(OUTFIT_CHANGED, sync);
 
   field.append(grid);
   if (captioned) field.append(caption);
@@ -441,19 +488,22 @@ function whenChanged(key: () => unknown[], draw: () => void): () => void {
   };
 }
 
-function colorInput(value: Rgb, onChange: (value: Rgb) => void): HTMLInputElement {
+function drawSprite(canvas: HTMLCanvasElement, url: string): void {
+  const image = new Image();
+  image.addEventListener('load', () => {
+    canvas.width = 16;
+    canvas.height = 32;
+    canvas.getContext('2d')!.drawImage(image, 0, 0, 16, 32, 0, 0, 16, 32);
+  });
+  image.src = url;
+}
+
+function colorInput(get: () => Rgb, set: (value: Rgb) => void): HTMLInputElement {
   const element = document.createElement('input');
   element.type = 'color';
-  element.value = toHex(value);
+  element.value = toHex(get());
   element.className = 'h-8 w-10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30';
-  element.addEventListener('input', () => onChange(fromHex(element.value)));
+  element.addEventListener('input', () => set(fromHex(element.value)));
+  document.addEventListener(OUTFIT_CHANGED, () => (element.value = toHex(get())));
   return element;
-}
-
-function toHex(color: Rgb): string {
-  return `#${color.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
-}
-
-function fromHex(hex: string): Rgb {
-  return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as Rgb;
 }

@@ -64,7 +64,6 @@ const textures: Record<string, Texture> = {};
 const stringFiles = new Map<string, Record<string, string>>();
 const NAMED_COLORS: Record<string, Rgb> = { white: [255, 255, 255] };
 
-// Bodies and palettes
 
 const bodies: Catalog['bodies'] = {
   male: {
@@ -82,12 +81,10 @@ check(textures[skinTexture].width >= 3, `${skinTexture} needs 3 colours per row`
 const shoeTexture = useTexture('Characters/Farmer/shoeColors');
 check(NEW_FARMER_SHOE_COLOR < textures[shoeTexture].height, `${shoeTexture} has no bare shoe row`);
 
-// Hairstyles: the sheet holds 8 per 96 px of height, and HairData adds more (ids 100+, plus
-// negative ids that are only drawn under hats).
+
 
 const hairData = new Map<number, HairData>();
 for (const [key, raw] of Object.entries(readJson<Record<string, string>>('Data/HairData'))) {
-  // texture/tileX/tileY/usesUniqueLeftSprite/coveredIndex/isBaldStyle
   const fields = raw.split('/');
   const what = `HairData ${key}`;
   hairData.set(int(key, what), {
@@ -130,7 +127,6 @@ for (const style of hairstyles) {
   }
 }
 
-// Accessories
 
 const accessoryTexture = useTexture('Characters/Farmer/accessories');
 const accessories: Accessory[] = [];
@@ -145,7 +141,6 @@ for (let id = 0; id < ACCESSORY_COUNT; id++) {
   });
 }
 
-// Shirts: 16 per row in the left 128 px of the sheet; the dye masks fill the right half.
 
 const shirts: Shirt[] = Object.entries(readJson<Record<string, ShirtData>>('Data/Shirts')).map(
   ([id, data]) => {
@@ -167,7 +162,6 @@ const shirts: Shirt[] = Object.entries(readJson<Record<string, ShirtData>>('Data
   },
 );
 
-// Pants: 10 per row.
 
 const pants: Pants[] = Object.entries(readJson<Record<string, ClothingData>>('Data/Pants')).map(
   ([id, data]) => {
@@ -188,10 +182,8 @@ const pants: Pants[] = Object.entries(readJson<Record<string, ClothingData>>('Da
   },
 );
 
-// Hats
 
 const hats: Hat[] = Object.entries(readJson<Record<string, string>>('Data/hats')).map(([id, raw]) => {
-  // name/description/showRealHair/skipHairstyleOffset/tags/displayName[/spriteIndex[/texture]]
   const fields = raw.split('/');
   const what = `hat ${id}`;
   const texture = useTexture(fields[7] || 'Characters/Farmer/hats');
@@ -211,11 +203,9 @@ const hats: Hat[] = Object.entries(readJson<Record<string, string>>('Data/hats')
   };
 });
 
-// Boots
 
 const boots: Boots[] = Object.entries(readJson<Record<string, string>>('Data/Boots')).map(
   ([id, raw]) => {
-    // name/description/price/defense/immunity/colorIndex/displayName[/colorTexture/...]
     const fields = raw.split('/');
     const what = `boots ${id}`;
     const palette = useTexture(fields[7] || 'Characters/Farmer/shoeColors');
@@ -257,7 +247,11 @@ const catalog: Catalog = {
   boots,
 };
 
-// Output: everything was validated above, so only now replace the previous files.
+const villagerSprites = (JSON.parse(readFileSync(join(root, 'src', 'npc-presets.json'), 'utf8')) as { sprite: string }[]).map(
+  ({ sprite }) => `Characters/${sprite}`,
+);
+for (const sprite of villagerSprites) check(existsSync(join(contentDir, `${sprite}.png`)), `No villager sprite ${sprite}`);
+
 
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
@@ -266,20 +260,18 @@ for (const [key, texture] of Object.entries(catalog.textures)) {
   mkdirSync(dirname(target), { recursive: true });
   copyFileSync(join(contentDir, `${key}.png`), target);
 }
+for (const sprite of villagerSprites) copyFileSync(join(contentDir, `${sprite}.png`), join(outDir, `${sprite}.png`));
 writeFileSync(join(outDir, 'catalog.json'), formatCatalog(catalog));
 
 console.log(
   `Catalogue for Stardew Valley ${gameVersion}: ${hairstyles.length} hairstyles, ` +
     `${accessories.length} accessories, ${catalog.skinTones.count} skin tones, ` +
     `${shirts.length} shirts, ${pants.length} pants, ${hats.length} hats, ${boots.length} boots. ` +
-    `Wrote catalog.json and ${Object.keys(textures).length} textures to public/assets/.`,
+    `Wrote catalog.json, ${Object.keys(textures).length} textures and ${villagerSprites.length} villager sprites to public/assets/.`,
 );
 
-// Helpers
 
-// What the game draws for a hairstyle under a hat with the given hair mode. 
 function hairVariant(id: number, mode: HairMode): HairVariant {
-  // HairData of the chosen hairstyle decides baldness; without it, the drawn hairstyle does.
   const data = hairData.get(id);
   const bald = (drawn: number | null) => (data ? data.bald : drawn !== null && isBaldHairstyle(drawn));
   switch (mode) {
@@ -300,7 +292,6 @@ function baseHairSprite(id: number): HairSprite {
   return { texture: hairTexture, ...cell(id, 16, 96, textures[hairTexture].width), uniqueLeft: false };
 }
 
-// Registers a game texture to copy and returns its key, e.g. `Characters/Farmer/hats`. 
 function useTexture(assetName: string): string {
   const key = assetName.replaceAll('\\', '/');
   if (!textures[key]) {
@@ -317,7 +308,6 @@ function readPngSize(file: string): { width: number; height: number } {
   return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
 }
 
-// Top-left of sprite `index` in a sheet of `cellWidth` px wide cells wrapping every `rowWidth` px, as the game lays them out. 
 function cell(index: number, cellWidth: number, cellHeight: number, rowWidth: number): { x: number; y: number } {
   return {
     x: (index * cellWidth) % rowWidth,
@@ -337,7 +327,6 @@ function readJson<T>(assetName: string): T {
   return JSON.parse(readFileSync(join(contentDir, `${assetName}.json`), 'utf8')) as T;
 }
 
-// Resolves the game's `[LocalizedText <asset>:<key>]` tokens to the English text. 
 function text(raw: string | undefined, what: string): string {
   check(raw !== undefined, `${what} has no text`);
   const resolved = raw.replace(/\[LocalizedText ([^\]\s:]+):([^\]\s]+)\]/g, (_, asset: string, key: string) => {
@@ -356,8 +345,6 @@ function text(raw: string | undefined, what: string): string {
 }
 
 
-// Parses a colour like the game does: "R G B", "R G B A" or a colour name; none means white.
-// Alpha is dropped because clothes are always drawn opaque.
 
 function color(raw: string | null, what: string): Rgb {
   const value = raw?.trim();
@@ -380,7 +367,6 @@ function int(raw: string | undefined, what: string): number {
   return Number(raw);
 }
 
-// Parses "true" or "false" in any case, like .NET's Convert.ToBoolean. 
 function bool(raw: string | undefined, what: string): boolean {
   const value = raw?.trim().toLowerCase();
   check(value === 'true' || value === 'false', `${what}: expected true or false, got "${raw}"`);
@@ -391,7 +377,6 @@ function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-// JSON with one entry per line, which keeps the file compact and its diffs readable. 
 function formatCatalog(value: Catalog): string {
   const entries = Object.entries(value).map(([key, section]) => {
     let body: string;
