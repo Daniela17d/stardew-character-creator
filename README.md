@@ -1,4 +1,4 @@
-# stardew-character-creator
+# stardew-farmer-creator
 
 ## Credits and legal
 This is a non-commercial fan project. It is not affiliated with or endorsed by ConcernedApe.
