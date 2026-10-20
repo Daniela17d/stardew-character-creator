@@ -7,7 +7,11 @@ export interface FilterItem {
   anyColor: boolean;
   dyeable?: boolean;
   creation?: boolean;
+  tailorable?: boolean;
+  buyable?: boolean;
 }
+
+type Way = 'tailorable' | 'buyable' | 'neither';
 
 export interface Filter {
   bar: HTMLElement;
@@ -15,7 +19,10 @@ export interface Filter {
   onChange: (listener: () => void) => void;
 }
 
-export function createFilter(items: FilterItem[], options: { dyeable?: boolean; creation?: boolean } = {}): Filter {
+export function createFilter(
+  items: FilterItem[],
+  options: { dyeable?: boolean; creation?: boolean; obtain?: boolean } = {},
+): Filter {
   const byId = new Map(items.map((item) => [item.id, item]));
   const listeners: (() => void)[] = [];
   const changed = () => listeners.forEach((listener) => listener());
@@ -23,6 +30,7 @@ export function createFilter(items: FilterItem[], options: { dyeable?: boolean; 
   let color: ColorName | null = null;
   let dye: 'all' | 'dyeable' | 'plain' = 'all';
   let creationOnly = false;
+  const ways = new Set<Way>();
 
   const search = document.createElement('input');
   search.type = 'search';
@@ -63,6 +71,24 @@ export function createFilter(items: FilterItem[], options: { dyeable?: boolean; 
     const row = document.createElement('div');
     row.className = 'flex flex-wrap items-center gap-4';
     row.append(...extras);
+    bar.append(row);
+  }
+
+  if (options.obtain) {
+    const tailoring = items.some((item) => item.tailorable);
+    const choices: [Way, string, string][] = [
+      ['tailorable', 'Tailorable', 'Made at the sewing machine'],
+      ['buyable', 'Buyable', 'Sold in a shop'],
+      ['neither', tailoring ? 'Neither' : 'Not buyable', tailoring ? "Can't be tailored or bought" : "Can't be bought"],
+    ];
+    const row = document.createElement('div');
+    row.className = 'flex flex-wrap items-center gap-4';
+    for (const [way, label, hint] of choices) {
+      if (way === 'tailorable' && !tailoring) continue;
+      const box = checkbox(label, (on) => (on ? ways.add(way) : ways.delete(way)));
+      box.title = hint;
+      row.append(box);
+    }
     bar.append(row);
   }
 
@@ -119,6 +145,7 @@ export function createFilter(items: FilterItem[], options: { dyeable?: boolean; 
       if (dye === 'dyeable' && !item.dyeable) return false;
       if (dye === 'plain' && item.dyeable) return false;
       if (creationOnly && !item.creation) return false;
+      if (ways.size && ![...ways].some((way) => (way === 'neither' ? !item.tailorable && !item.buyable : item[way]))) return false;
       return true;
     },
     onChange: (listener) => listeners.push(listener),

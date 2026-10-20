@@ -45,7 +45,7 @@
     "shirtColor": "#21dbff",
     "pants": "Simple Dress",
     "pantsColor": "#4729b5",
-    "boots": "Cowboy Boots"
+    "boots": "Leather Boots"
   },
   {
     "name": "Clint",
@@ -125,7 +125,7 @@
     "shirtColor": "#ff126f",
     "pants": "Skirt",
     "pantsColor": "#ff126f",
-    "boots": "Cowboy Boots"
+    "boots": "Leather Boots"
   },
   {
     "name": "George",
@@ -157,7 +157,7 @@
     "shirtColor": null,
     "pants": "Farmer Pants",
     "pantsColor": "#6c0f50",
-    "boots": "Cowboy Boots"
+    "boots": "Leather Boots"
   },
   {
     "name": "Haley",
@@ -237,7 +237,7 @@
     "shirtColor": null,
     "pants": "Farmer Pants",
     "pantsColor": "#4fbbd8",
-    "boots": "Cowboy Boots"
+    "boots": "Leather Boots"
   },
   {
     "name": "Leah",
@@ -269,7 +269,7 @@
     "shirtColor": null,
     "pants": "Baggy Pants",
     "pantsColor": "#0d5757",
-    "boots": "Cowboy Boots"
+    "boots": "Leather Boots"
   },
   {
     "name": "Lewis",
@@ -493,7 +493,7 @@
     "shirtColor": null,
     "pants": "Relaxed Fit Pants",
     "pantsColor": "#282a46",
-    "boots": "Cowboy Boots"
+    "boots": "Leather Boots"
   },
   {
     "name": "Wizard",
@@ -621,6 +621,6 @@
     "shirtColor": null,
     "pants": "Relaxed Fit Pants",
     "pantsColor": "#4777dc",
-    "boots": "Cowboy Boots"
+    "boots": "Leather Boots"
   }
 ]

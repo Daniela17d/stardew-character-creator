@@ -14,6 +14,7 @@ import type {
   Pants,
   Rgb,
   Shirt,
+  Source,
   Tailoring,
   Texture,
 } from '../src/catalog/types.ts';
@@ -33,6 +34,7 @@ interface ClothingData {
   Texture: string | null;
   SpriteIndex: number;
   DefaultColor: string | null;
+  Price: number;
   CanBeDyed: boolean;
   IsPrismatic: boolean;
   CanChooseDuringCharacterCustomization: boolean;
@@ -55,6 +57,7 @@ interface ObjectData {
   ContextTags: string[] | null;
   Texture: string | null;
   SpriteIndex: number;
+  GeodeDrops: (ChanceItemData & { SetFlagOnPickup: string | null })[] | null;
 }
 
 interface TailoringRecipeData {
@@ -64,6 +67,25 @@ interface TailoringRecipeData {
   CraftedItemId: string | null;
   CraftedItemIds: string[] | null;
   CraftedItemIdFeminine: string | null;
+}
+
+interface SpawnItemData {
+  ItemId: string | null;
+  Condition: string | null;
+}
+
+interface ChanceItemData extends SpawnItemData {
+  Chance: number;
+}
+
+interface ShopData {
+  Currency: number;
+  Items: (SpawnItemData & { Price: number; TradeItemId: string | null; TradeItemAmount: number })[] | null;
+}
+
+interface MakeoverOutfitData {
+  Gender: string | null;
+  OutfitParts: { ItemId: string; Gender: string | null }[] | null;
 }
 
 const root = resolve(import.meta.dirname, '..');
@@ -85,6 +107,39 @@ const icons: Record<string, Texture> = {};
 const stringFiles = new Map<string, Record<string, string>>();
 const NAMED_COLORS: Record<string, Rgb> = { white: [255, 255, 255] };
 const CATEGORY_TAGS: Record<number, string> = { [-4]: 'category_fish', [-75]: 'category_vegetable', [-79]: 'category_fruits' };
+const WORN_AS: Record<string, string> = { '(O)71': '(P)15' };
+const SHOP_NAMES: Record<string, string> = {
+  AdventureShop: "Adventurer's Guild",
+  Casino: 'Casino',
+  DesertFestival_Abigail: "Desert Festival, Abigail's stall",
+  DesertFestival_EggShop: 'Desert Festival egg shop',
+  DesertFestival_Elliott: "Desert Festival, Elliott's stall",
+  DesertFestival_Maru: "Desert Festival, Maru's stall",
+  DesertTrade: 'Desert Trader',
+  Festival_NightMarket_MagicBoat_Day1: 'Night Market magic boat, day 1',
+  Festival_NightMarket_MagicBoat_Day2: 'Night Market magic boat, day 2',
+  Festival_NightMarket_MagicBoat_Day3: 'Night Market magic boat, day 3',
+  Festival_StardewValleyFair_StarTokens: 'Stardew Valley Fair',
+  HatMouse: 'Hat Mouse',
+  IslandTrade: 'Island Trader',
+  QiGemShop: "Qi's Walnut Room",
+  Raccoon: "Raccoon family's shop",
+  Sandy: 'Oasis',
+  Traveler: 'Traveling Cart',
+  VolcanoShop: 'Volcano Dwarf',
+};
+const CURRENCIES: Record<number, string> = { 0: 'g', 1: ' star tokens', 2: ' Qi coins', 4: ' Qi gems' };
+const MAIL_FLAGS: Record<string, string> = {
+  'Egg Festival': 'after winning the egg hunt at the Egg Festival',
+  'Ice Festival': 'after winning the fishing contest at the Festival of Ice',
+};
+const STATS: Record<string, string> = {
+  ticketPrizesClaimed: 'after claiming {0} prizes from the prize machine',
+  trashCansChecked: 'after checking {0} garbage cans',
+};
+const WORLD_STATE_FIELDS: Record<string, string> = { TimesFedRaccoons: 'after helping the raccoon family {0} times' };
+const TREE_NAMES: Record<string, string> = { 7: 'a mushroom tree' };
+const LOCATION_NAMES: Record<string, string> = { IslandFarmCave: 'the Ginger Island farm cave' };
 
 
 const bodies: Catalog['bodies'] = {
@@ -164,7 +219,9 @@ for (let id = 0; id < ACCESSORY_COUNT; id++) {
 }
 
 
+const objectData = readJson<Record<string, ObjectData>>('Data/Objects');
 const tailoring = tailoringRecipes();
+const sources = obtainSources();
 
 const shirts: Shirt[] = Object.entries(readJson<Record<string, ShirtData>>('Data/Shirts')).map(
   ([id, data]) => {
@@ -183,6 +240,7 @@ const shirts: Shirt[] = Object.entries(readJson<Record<string, ShirtData>>('Data
       sleeves: data.HasSleeves,
       creation: data.CanChooseDuringCharacterCustomization,
       tailoring: tailoring.byItem.get(`(S)${id}`) ?? [],
+      sources: sources.get(`(S)${id}`) ?? [],
     };
   },
 );
@@ -204,6 +262,7 @@ const pants: Pants[] = Object.entries(readJson<Record<string, ClothingData>>('Da
       prismatic: data.IsPrismatic,
       creation: data.CanChooseDuringCharacterCustomization,
       tailoring: tailoring.byItem.get(`(P)${id}`) ?? [],
+      sources: sources.get(`(P)${id}`) ?? [],
     };
   },
 );
@@ -227,6 +286,7 @@ const hats: Hat[] = Object.entries(readJson<Record<string, string>>('Data/hats')
     mask: fields[0].includes('Mask') && hairMode !== 'hide',
     prismatic: (fields[4] ?? '').split(/\s+/).includes('Prismatic'),
     tailoring: tailoring.byItem.get(`(H)${id}`) ?? [],
+    sources: sources.get(`(H)${id}`) ?? [],
   };
 });
 
@@ -245,6 +305,7 @@ const boots: Boots[] = Object.entries(readJson<Record<string, string>>('Data/Boo
       description: text(fields[1], what),
       palette,
       colorIndex,
+      sources: sources.get(`(B)${id}`) ?? [],
     };
   },
 );
@@ -302,7 +363,7 @@ console.log(
 
 
 function tailoringRecipes(): { cloth: Ingredient; byItem: Map<string, Tailoring[]> } {
-  const objects = Object.entries(readJson<Record<string, ObjectData>>('Data/Objects')).map(([id, data]) => ({
+  const objects = Object.entries(objectData).map(([id, data]) => ({
     id,
     data,
     tags: new Set([
@@ -316,18 +377,26 @@ function tailoringRecipes(): { cloth: Ingredient; byItem: Map<string, Tailoring[
   const cloth = objects.find((object) => object.tags.has('item_cloth'));
   check(cloth, 'Data/Objects has no Cloth');
   const fits = (object: GameObject, tags: string[]) => tags.every((tag) => object.tags.has(tag));
-  const recipes = readJson<TailoringRecipeData[]>('Data/TailoringRecipes').filter((recipe) => fits(cloth, recipe.FirstItemTags));
-  for (const recipe of recipes) {
-    check(objects.some((object) => fits(object, recipe.SecondItemTags)), `Tailoring ${recipe.Id}: no item has ${recipe.SecondItemTags}`);
-  }
+  const recipes = readJson<TailoringRecipeData[]>('Data/TailoringRecipes');
+  const bases = new Map(
+    recipes.map((recipe) => {
+      const matches = objects.filter((object) => fits(object, recipe.FirstItemTags));
+      check(matches.length === 1, `Tailoring ${recipe.Id}: expected one item with ${recipe.FirstItemTags}`);
+      check(objects.some((object) => fits(object, recipe.SecondItemTags)), `Tailoring ${recipe.Id}: no item has ${recipe.SecondItemTags}`);
+      return [recipe, matches[0]];
+    }),
+  );
 
   const used = new Map<TailoringRecipeData, GameObject[]>();
-  for (const object of objects) {
-    const recipe = recipes.find((entry) => fits(object, entry.SecondItemTags));
-    if (recipe) used.set(recipe, [...(used.get(recipe) ?? []), object]);
+  for (const base of new Set(bases.values())) {
+    const options = recipes.filter((recipe) => bases.get(recipe) === base);
+    for (const object of objects) {
+      const recipe = options.find((entry) => fits(object, entry.SecondItemTags));
+      if (recipe) used.set(recipe, [...(used.get(recipe) ?? []), object]);
+    }
   }
   const names = new Map(
-    [cloth, ...[...used.values()].flat()].map((object) => [object, text(object.data.DisplayName, `object ${object.id}`)]),
+    [...bases.values(), ...[...used.values()].flat()].map((object) => [object, text(object.data.DisplayName, `object ${object.id}`)]),
   );
   const ingredient = (object: GameObject): Ingredient => {
     let name = names.get(object)!;
@@ -335,31 +404,185 @@ function tailoringRecipes(): { cloth: Ingredient; byItem: Map<string, Tailoring[
       const color = [...object.tags].find((tag) => tag.startsWith('color_'));
       name += ` (${color ? color.slice(6).replaceAll('_', ' ') : object.id})`;
     }
-    const texture = useTexture(object.data.Texture ?? 'Maps/springobjects', icons);
-    const { x, y } = cell(object.data.SpriteIndex, 16, 16, icons[texture].width);
-    checkFits(texture, x, y, 16, 16, `object ${object.id}`);
-    return { name, icon: { texture, x, y } };
+    return objectIngredient(object.id, name);
   };
 
   const byItem = new Map<string, Tailoring[]>();
   for (const recipe of recipes) {
     const matched = used.get(recipe);
     if (!matched) continue;
+    const base = bases.get(recipe) === cloth ? undefined : ingredient(bases.get(recipe)!);
     const male = recipe.CraftedItemIds?.length ? recipe.CraftedItemIds : [recipe.CraftedItemId];
     const female = recipe.CraftedItemIdFeminine ? [recipe.CraftedItemIdFeminine] : male;
     for (const id of new Set([...male, ...female])) {
       check(id && /^\(\w+\)/.test(id), `Tailoring ${recipe.Id}: expected a qualified item id, got "${id}"`);
       const farmer = !female.includes(id) ? 'male' : !male.includes(id) ? 'female' : undefined;
       const random = (farmer === 'female' ? female : male).length > 1;
-      const entries = byItem.get(id) ?? [];
+      const target = WORN_AS[id] ?? id;
+      const entries = byItem.get(target) ?? [];
       const items = matched.map(ingredient);
-      const same = entries.find((entry) => entry.farmer === farmer && Boolean(entry.random) === random);
+      const same = entries.find(
+        (entry) => entry.base?.name === base?.name && entry.farmer === farmer && Boolean(entry.random) === random,
+      );
       if (same) same.items.push(...items.filter((item) => !same.items.some((other) => other.name === item.name)));
-      else entries.push({ items, ...(farmer ? { farmer } : {}), ...(random ? { random } : {}) });
-      byItem.set(id, entries);
+      else entries.push({ ...(base ? { base } : {}), items, ...(farmer ? { farmer } : {}), ...(random ? { random } : {}) });
+      byItem.set(target, entries);
     }
   }
   return { cloth: ingredient(cloth), byItem };
+}
+
+function obtainSources(): Map<string, Source[]> {
+  const clothing = new Set(
+    Object.entries({ '(S)': 'Data/Shirts', '(P)': 'Data/Pants', '(H)': 'Data/hats', '(B)': 'Data/Boots' }).flatMap(([type, asset]) =>
+      Object.keys(readJson<Record<string, unknown>>(asset)).map((id) => type + id),
+    ),
+  );
+  const sources = new Map<string, Source[]>();
+  const add = (itemId: string | null, source: () => Source) => {
+    const id = itemId?.startsWith('(') ? itemId : itemId && !objectData[itemId] ? [...clothing].find((entry) => entry.endsWith(`)${itemId}`)) : undefined;
+    if (!id || !clothing.has(id)) return;
+    const entries = sources.get(id) ?? [];
+    const next = source();
+    if (!entries.some((entry) => JSON.stringify(entry) === JSON.stringify(next))) entries.push(next);
+    sources.set(id, entries);
+  };
+  const sourceOf = (where: string, when: string[]): Source => (when.length ? { where, when } : { where });
+  const odds = (chance: number) => (chance < 1 ? [`${percent(chance)} chance`] : []);
+
+  const achievements = readJson<Record<string, string>>('Data/Achievements');
+  const describe = (query: string | null, what: string): string[] =>
+    (query ? query.split(',') : []).map((part) => {
+      const [type, ...args] = (part.match(/"[^"]*"|\S+/g) ?? []).map((arg) => arg.replaceAll('"', ''));
+      const fill = (template: string | undefined, value = '') => {
+        check(template, `${what}: no wording for the condition "${part.trim()}"`);
+        return template.replace('{0}', value);
+      };
+      switch (type) {
+        case 'PLAYER_HAS_ACHIEVEMENT': {
+          const [name, description] = achievements[args[1]]?.split('^') ?? [];
+          check(description, `${what}: no achievement ${args[1]}`);
+          return `after the achievement “${name}” (${description.replace(/\.$/, '')})`;
+        }
+        case 'PLAYER_HAS_ALL_ACHIEVEMENTS':
+          return 'after earning every achievement';
+        case 'PLAYER_HAS_MAIL':
+          return fill(MAIL_FLAGS[args[1]]);
+        case 'PLAYER_STAT':
+          return fill(STATS[args[1]], args[2]);
+        case 'WORLD_STATE_FIELD':
+          return fill(WORLD_STATE_FIELDS[args[0]], args[1]);
+        case 'MINE_LOWEST_LEVEL_REACHED':
+          return `after reaching mine level ${args[0]}`;
+        case 'DAY_OF_MONTH':
+          return fill(args.length === 1 && (args[0] === 'odd' || args[0] === 'even') ? `on ${args[0]} days` : undefined);
+        case 'DAY_OF_WEEK':
+          return `on ${args.map((day) => `${day}s`).join(' and ')}`;
+        case 'SYNCED_RANDOM':
+          return `${percent(Number(args[2]))} chance each ${args[0]}`;
+        case 'RANDOM':
+          return `${percent(Number(args[0]))} chance`;
+      }
+      return fill(undefined);
+    });
+
+  const shirtData = readJson<Record<string, ShirtData>>('Data/Shirts');
+  for (const [key, shop] of Object.entries(readJson<Record<string, ShopData>>('Data/Shops'))) {
+    for (const entry of shop.Items ?? []) {
+      const range = /^RANDOM_ITEMS \(S\) (\d+) (\d+) @requirePrice @isRandomSale$/.exec(entry.ItemId ?? '');
+      const ids = range
+        ? Object.keys(shirtData)
+            .filter((id) => +id >= +range[1] && +id <= +range[2] && shirtData[id].Price > 0)
+            .map((id) => `(S)${id}`)
+        : [entry.ItemId];
+      for (const id of ids) {
+        add(id, () => {
+          const what = `Shop ${key}, ${entry.ItemId}`;
+          check(SHOP_NAMES[key], `${what}: add the shop to SHOP_NAMES`);
+          const source = sourceOf(SHOP_NAMES[key], [...(range ? ['random daily stock'] : []), ...describe(entry.Condition, what)]);
+          if (entry.TradeItemId) {
+            const tradeId = entry.TradeItemId.replace(/^\(O\)/, '');
+            check(objectData[tradeId], `${what}: can't show the trade item ${entry.TradeItemId}`);
+            source.trade = { item: objectIngredient(tradeId), amount: entry.TradeItemAmount };
+          }
+          if (!entry.TradeItemId || entry.Price > 0) {
+            check(entry.Price >= 0 && CURRENCIES[shop.Currency], `${what}: no price`);
+            source.cost = `${entry.Price.toLocaleString('en-US')}${CURRENCIES[shop.Currency]}`;
+          }
+          return source;
+        });
+      }
+    }
+  }
+
+  for (const [key, quest] of Object.entries(
+    readJson<Record<string, { DisplayName: string; Count: number; RewardItemId: string | null }>>('Data/MonsterSlayerQuests'),
+  )) {
+    add(quest.RewardItemId, () =>
+      sourceOf("Adventurer's Guild", [`reward for slaying ${quest.Count} ${text(quest.DisplayName, `slayer quest ${key}`)}`]),
+    );
+  }
+
+  const garbage = readJson<{ BeforeAll: SpawnItemData[]; AfterAll: SpawnItemData[]; GarbageCans: Record<string, { Items: SpawnItemData[] | null }> }>(
+    'Data/GarbageCans',
+  );
+  for (const drop of [...garbage.BeforeAll, ...garbage.AfterAll, ...Object.values(garbage.GarbageCans).flatMap((can) => can.Items ?? [])]) {
+    add(drop.ItemId, () => sourceOf('Garbage cans', describe(drop.Condition, `garbage ${drop.ItemId}`)));
+  }
+
+  for (const [id, tree] of Object.entries(readJson<Record<string, { ChopItems: ChanceItemData[] | null }>>('Data/WildTrees'))) {
+    for (const drop of tree.ChopItems ?? []) {
+      add(drop.ItemId, () => {
+        check(TREE_NAMES[id], `Wild tree ${id} drops clothing: add it to TREE_NAMES`);
+        return sourceOf(`Chopping ${TREE_NAMES[id]}`, [...odds(drop.Chance), ...describe(drop.Condition, `tree ${id}`)]);
+      });
+    }
+  }
+
+  for (const [id, data] of Object.entries(objectData)) {
+    for (const drop of data.GeodeDrops ?? []) {
+      add(drop.ItemId, () => {
+        const once = drop.SetFlagOnPickup && drop.Condition === `!PLAYER_HAS_MAIL Current ${drop.SetFlagOnPickup}`;
+        return sourceOf(`Opening a ${text(data.DisplayName, `object ${id}`)}`, [
+          ...odds(drop.Chance),
+          ...(once ? ['once'] : describe(drop.Condition, `object ${id}`)),
+        ]);
+      });
+    }
+  }
+
+  for (const [id, location] of Object.entries(readJson<Record<string, { Fish: ChanceItemData[] | null }>>('Data/Locations'))) {
+    for (const fish of location.Fish ?? []) {
+      add(fish.ItemId, () => {
+        check(LOCATION_NAMES[id], `${id} has clothing to fish up: add it to LOCATION_NAMES`);
+        return sourceOf(`Fishing in ${LOCATION_NAMES[id]}`, [...odds(fish.Chance), ...describe(fish.Condition, `fish in ${id}`)]);
+      });
+    }
+  }
+
+  const makeovers = new Map<string, Set<string | null>>();
+  for (const outfit of readJson<MakeoverOutfitData[]>('Data/MakeoverOutfits')) {
+    for (const part of outfit.OutfitParts ?? []) {
+      makeovers.set(part.ItemId, (makeovers.get(part.ItemId) ?? new Set()).add(part.Gender ?? outfit.Gender));
+    }
+  }
+  for (const [itemId, genders] of makeovers) {
+    const only = genders.size === 1 ? [...genders][0] : null;
+    add(itemId, () => sourceOf('Desert Festival makeover', ['part of a random outfit', ...(only ? [`${only.toLowerCase()} farmers only`] : [])]));
+  }
+  return sources;
+}
+
+function objectIngredient(id: string, name?: string): Ingredient {
+  const data = objectData[id];
+  const texture = useTexture(data.Texture ?? 'Maps/springobjects', icons);
+  const { x, y } = cell(data.SpriteIndex, 16, 16, icons[texture].width);
+  checkFits(texture, x, y, 16, 16, `object ${id}`);
+  return { name: name ?? text(data.DisplayName, `object ${id}`), icon: { texture, x, y } };
+}
+
+function percent(chance: number): string {
+  return `${+(chance * 100).toFixed(3)}%`;
 }
 
 function contextTag(value: string): string {

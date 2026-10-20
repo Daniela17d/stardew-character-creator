@@ -1,8 +1,9 @@
 import { ACCESSORY_NAMES } from './accessory-names.ts';
-import type { Catalog, Ingredient, Rgb, Tailoring } from './catalog/types.ts';
+import type { Catalog, Ingredient, Rgb, Source, Tailoring } from './catalog/types.ts';
 import { fromHex, toHex } from './color.ts';
 import { createFilter } from './filters.ts';
 import { bootsColors, correctColors, hatColors, pantsColors, shirtColors } from './item-colors.ts';
+import SOURCE_NOTES from './item-sources.json';
 import type { Outfit } from './outfit.ts';
 import type { Direction } from './render/animation.ts';
 import { BODY_X, BODY_Y, type FarmerRenderer, type Parts } from './render/farmer.ts';
@@ -160,6 +161,10 @@ export function createEditor(
   const pantsNames = distinctNames(catalog.pants);
   const hatNames = distinctNames(catalog.hats);
   const bootsNames = distinctNames(catalog.boots);
+  const shirtNotes = notesFor('shirts', shirtNames);
+  const pantsNotes = notesFor('pants', pantsNames);
+  const hatNotes = notesFor('hats', hatNames);
+  const bootsNotes = notesFor('boots', bootsNames);
 
   const body = section('Body');
   const skinPictures = Array.from({ length: catalog.skinTones.count }, () => thumbnail('h-16 w-8'));
@@ -268,7 +273,7 @@ export function createEditor(
           value: item.id,
           label: number,
           caption: newGameCaption(shirtNames.get(item.id) ?? item.name, number),
-          details: () => tailoringDetails(catalog, item.tailoring),
+          details: () => itemDetails(catalog, item, shirtNotes(item.id)),
           picture: shirtPictures[i],
         };
       }),
@@ -290,9 +295,11 @@ export function createEditor(
             anyColor: item.dyeable || item.prismatic,
             dyeable: item.dyeable,
             creation: item.creation,
+            tailorable: item.tailoring.length > 0,
+            buyable: sold(item.sources),
           })),
         ),
-        { dyeable: true, creation: true },
+        { dyeable: true, creation: true, obtain: true },
       ),
     ),
   );
@@ -327,7 +334,7 @@ export function createEditor(
           value: item.id,
           label: number,
           caption: newGameCaption(pantsNames.get(item.id) ?? item.name, number),
-          details: () => tailoringDetails(catalog, item.tailoring),
+          details: () => itemDetails(catalog, item, pantsNotes(item.id)),
           picture: pantsPictures[i],
         };
       }),
@@ -349,9 +356,11 @@ export function createEditor(
             anyColor: item.dyeable || item.prismatic,
             dyeable: item.dyeable,
             creation: item.creation,
+            tailorable: item.tailoring.length > 0,
+            buyable: sold(item.sources),
           })),
         ),
-        { dyeable: true, creation: true },
+        { dyeable: true, creation: true, obtain: true },
       ),
     ),
   );
@@ -374,7 +383,7 @@ export function createEditor(
         ...catalog.hats.map((item, i) => ({
           value: item.id,
           caption: hatNames.get(item.id),
-          details: () => tailoringDetails(catalog, item.tailoring),
+          details: () => itemDetails(catalog, item, hatNotes(item.id)),
           picture: hatPictures[i],
         })),
       ],
@@ -390,8 +399,11 @@ export function createEditor(
             name: hatNames.get(item.id) ?? item.name,
             colors: hatColors(textures, item),
             anyColor: item.prismatic,
+            tailorable: item.tailoring.length > 0,
+            buyable: sold(item.sources),
           })),
         ),
+        { obtain: true },
       ),
     ),
   );
@@ -409,7 +421,12 @@ export function createEditor(
     choiceGrid<string | null>(
       [
         { value: null, caption: 'None', picture: noneIcon('h-6 w-12') },
-        ...catalog.boots.map((item, i) => ({ value: item.id, caption: bootsNames.get(item.id), picture: bootsPictures[i] })),
+        ...catalog.boots.map((item, i) => ({
+          value: item.id,
+          caption: bootsNames.get(item.id),
+          details: () => itemDetails(catalog, item, bootsNotes(item.id)),
+          picture: bootsPictures[i],
+        })),
       ],
       'grid-cols-6',
       () => outfit.boots,
@@ -423,8 +440,10 @@ export function createEditor(
             name: bootsNames.get(item.id) ?? item.name,
             colors: bootsColors(textures, catalog, item),
             anyColor: false,
+            buyable: sold(item.sources),
           })),
         ),
+        { obtain: true },
       ),
     ),
   );
@@ -560,26 +579,65 @@ function newGameCaption(name: string, number: string): string {
   return number ? `${name} · new game #${number}` : name;
 }
 
-function tailoringDetails(catalog: Catalog, recipes: Tailoring[]): HTMLElement {
+function sold(sources: Source[]): boolean {
+  return sources.some((source) => source.cost || source.trade);
+}
+
+function notesFor(kind: keyof typeof SOURCE_NOTES, names: Map<string, string>): (id: string) => string[] {
+  const listed: Record<string, string[]> = SOURCE_NOTES[kind];
+  const known = new Set(names.values());
+  for (const name of Object.keys(listed)) if (!known.has(name)) console.warn(`item-sources.json: no ${kind} called "${name}"`);
+  return (id) => listed[names.get(id) ?? ''] ?? [];
+}
+
+function itemDetails(catalog: Catalog, item: { tailoring?: Tailoring[]; sources: Source[] }, notes: string[]): HTMLElement {
   const element = document.createElement('div');
   element.className = 'flex flex-col gap-1';
-  if (!recipes.length) {
-    element.textContent = 'Not made at the sewing machine.';
-    return element;
-  }
-  for (const { items, farmer, random } of recipes) {
-    const line = document.createElement('p');
-    line.className = 'flex flex-wrap items-center gap-x-2 gap-y-1';
-    line.append('Sewing machine:', ingredient(catalog, catalog.cloth), '+');
-    if (items.length > 2) line.append('one of:');
-    items.forEach((item, i) => {
-      if (i && items.length === 2) line.append('or');
-      line.append(ingredient(catalog, item));
-    });
-    if (farmer) line.append(`(${farmer} farmer)`);
-    if (random) line.append('(random result)');
-    element.append(line);
-  }
+  element.append(
+    ...(item.tailoring ?? []).map((recipe) => tailoringLine(catalog, recipe)),
+    ...item.sources.map((source) => sourceLine(catalog, source)),
+    ...notes.map(noteLine),
+  );
+  if (!element.childElementCount) element.textContent = 'No known source.';
+  return element;
+}
+
+function tailoringLine(catalog: Catalog, { base, items, farmer, random }: Tailoring): HTMLElement {
+  const line = document.createElement('p');
+  line.className = 'flex flex-wrap items-center gap-x-2 gap-y-1';
+  line.append(bold('Sewing machine:'), ingredient(catalog, base ?? catalog.cloth), '+');
+  if (items.length > 2) line.append('one of:');
+  items.forEach((item, i) => {
+    if (i && items.length === 2) line.append('or');
+    line.append(ingredient(catalog, item));
+  });
+  if (farmer) line.append(`(${farmer} farmer)`);
+  if (random) line.append('(random result)');
+  return line;
+}
+
+function sourceLine(catalog: Catalog, { where, cost, trade, when }: Source): HTMLElement {
+  const parts: (string | Node)[][] = [];
+  if (cost) parts.push([cost]);
+  if (trade) parts.push([`${trade.amount} × `, ingredient(catalog, trade.item)]);
+  for (const condition of when ?? []) parts.push([condition]);
+  const line = document.createElement('p');
+  line.append(bold(`${where}:`), ' ');
+  parts.forEach((part, i) => line.append(...(i ? [', '] : []), ...part));
+  return line;
+}
+
+function noteLine(note: string): HTMLElement {
+  const line = document.createElement('p');
+  const split = note.indexOf(': ');
+  line.append(...(split > 0 ? [bold(note.slice(0, split + 1)), note.slice(split + 1)] : [note]));
+  return line;
+}
+
+function bold(text: string): HTMLElement {
+  const element = document.createElement('span');
+  element.className = 'font-semibold';
+  element.textContent = text;
   return element;
 }
 
@@ -593,7 +651,7 @@ function ingredient(catalog: Catalog, { name, icon }: Ingredient): HTMLElement {
   picture.style.backgroundPosition = `-${icon.x * ICON_SCALE}px -${icon.y * ICON_SCALE}px`;
   picture.style.backgroundSize = `${sheet.width * ICON_SCALE}px ${sheet.height * ICON_SCALE}px`;
   const chip = document.createElement('span');
-  chip.className = 'flex items-center gap-1';
+  chip.className = 'inline-flex items-center gap-1 align-middle';
   chip.append(picture, name);
   return chip;
 }

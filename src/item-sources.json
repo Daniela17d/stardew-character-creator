@@ -1,0 +1,67 @@
+{
+  "shirts": {
+    "Emily's Magic Shirt": ["Emily: a gift in her 14-heart event, when married to her"],
+    "Mystery Shirt": ["Mystery Box: 1% chance (2% in a Golden Mystery Box)"],
+    "Tie Dye Shirt": ["Rare random find: artifact spots, panning, trees, monsters and crates"],
+    "Neat Bow Shirt (1173)": ["Rare random find: artifact spots, panning, trees, monsters and crates"],
+    "Red Buttoned Vest": ["Rare random find: artifact spots, panning, trees, monsters and crates"]
+  },
+  "pants": {
+    "Polka Dot Shorts": ["Unobtainable"]
+  },
+  "hats": {
+    "Blue Cowboy Hat": ["Skull Cavern: rare treasure room chest"],
+    "Red Cowboy Hat": ["Skull Cavern: rare treasure room chest"],
+    "Dark Cowboy Hat": ["Skull Cavern: rare treasure room chest"],
+    "Living Hat": ["Wilderness and Iridium Golems: very rare drop", "Cutting weeds: 1 in 100,000"],
+    "Emily's Magic Hat": ["Emily: a gift in her 14-heart event, when married to her"],
+    "Squire's Helmet": ["Metal Heads: 1 in every 100 you slay"],
+    "Copper Pan": ["Pan: Willy gives it to you once the fish tank bundles, or the matching Joja project, are done; wear it as a hat"],
+    "Steel Pan": ["Pan: upgrade it at Clint's, then wear it as a hat"],
+    "Gold Pan": ["Pan: upgrade it at Clint's, then wear it as a hat"],
+    "Iridium Pan": ["Pan: upgrade it at Clint's, then wear it as a hat"],
+    "Deluxe Pirate Hat": ["Volcano Dungeon: rare treasure chests"],
+    "Tiger Hat": ["Tiger Slimes: 0.1% drop"],
+    "???": ["Volcano Caldera: found after reaching Perfection"],
+    "Bucket Hat": ["Trout Derby: one of the prizes for Golden Tags"],
+    "Mystery Hat": ["Mystery Box: 1% chance (2% in a Golden Mystery Box)"],
+    "Leprechaun Hat": ["Cindersap Forest: hit the pot of gold that appears on Spring 17"],
+    "Gil's Hat": ["Desert Festival: an Egg Rating of 25 or more from Gil, first time only"],
+    "Squid Hat": ["SquidFest: catch 10 squid on Winter 13"],
+    "Panda Hat": ["WeGame only: given to players on Tencent's WeGame platform in mainland China; unobtainable otherwise"]
+  },
+  "boots": {
+    "Sneakers": ["Mine monsters: rare drop on floors 1–39", "Fishing treasure chests: rare"],
+    "Rubber Boots": ["Mine monsters: rare drop on floors 1–39", "Fishing treasure chests: rare"],
+    "Leather Boots": ["Mine chest on floor 10, with remixed mine rewards", "Fishing treasure chests: rare"],
+    "Work Boots": ["Mine chest on floor 10, with remixed mine rewards", "Fishing treasure chests: rare"],
+    "Combat Boots": [
+      "Mine monsters: rare drop on floors 60–79",
+      "Mine chest on floor 50, with remixed mine rewards",
+      "Fishing treasure chests: rare"
+    ],
+    "Tundra Boots": ["Mine chest on floor 50, with remixed mine rewards", "Fishing treasure chests: rare"],
+    "Thermal Boots": [
+      "Mine monsters: rare drop on floors 40–79",
+      "Mine chest on floor 50, with remixed mine rewards",
+      "Fishing treasure chests: rare"
+    ],
+    "Dark Boots": [
+      "Mine monsters: rare drop from floor 80 and in the Skull Cavern",
+      "Mine chest on floor 80, with remixed mine rewards",
+      "Fishing treasure chests: rare"
+    ],
+    "Firewalker Boots": ["Mine chest on floor 80, with remixed mine rewards", "Fishing treasure chests: rare"],
+    "Genie Shoes": ["Mine monsters: rare drop from floor 80 and in the Skull Cavern", "Fishing treasure chests: rare"],
+    "Space Boots": ["Mine chest on floor 110, with remixed mine rewards"],
+    "Cowboy Boots": ["Unobtainable"],
+    "Emily's Magic Boots": ["Emily: a gift in her 14-heart event, when married to her"],
+    "Leprechaun Shoes": ["Trains: can fall off passing cargo cars (rare)"],
+    "Mermaid Boots": ["Volcano Dungeon: rare treasure chests"],
+    "Dragonscale Boots": ["Volcano Dungeon: rare treasure chests"],
+    "Crystal Shoes": [
+      "Mine monsters: rare drop on floor 120 and in the Skull Cavern",
+      "Mine chest on floor 110, with remixed mine rewards"
+    ]
+  }
+}

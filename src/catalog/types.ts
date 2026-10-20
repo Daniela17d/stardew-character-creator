@@ -46,6 +46,7 @@ interface Item {
   id: string;
   name: string;
   description: string;
+  sources: Source[];
 }
 
 export interface Ingredient {
@@ -54,9 +55,17 @@ export interface Ingredient {
 }
 
 export interface Tailoring {
+  base?: Ingredient;
   items: Ingredient[];
   farmer?: 'male' | 'female';
   random?: boolean;
+}
+
+export interface Source {
+  where: string;
+  cost?: string;
+  trade?: { item: Ingredient; amount: number };
+  when?: string[];
 }
 
 export interface Shirt extends Item {
