@@ -10,9 +10,11 @@ import type {
   HairVariant,
   Hairstyle,
   Hat,
+  Ingredient,
   Pants,
   Rgb,
   Shirt,
+  Tailoring,
   Texture,
 } from '../src/catalog/types.ts';
 import {
@@ -46,6 +48,24 @@ interface HairData {
   bald: boolean;
 }
 
+interface ObjectData {
+  Name: string;
+  DisplayName: string;
+  Category: number;
+  ContextTags: string[] | null;
+  Texture: string | null;
+  SpriteIndex: number;
+}
+
+interface TailoringRecipeData {
+  Id: string;
+  FirstItemTags: string[];
+  SecondItemTags: string[];
+  CraftedItemId: string | null;
+  CraftedItemIds: string[] | null;
+  CraftedItemIdFeminine: string | null;
+}
+
 const root = resolve(import.meta.dirname, '..');
 const outDir = join(root, 'public', 'assets');
 
@@ -61,8 +81,10 @@ const contentDir = resolve(args.content);
 check(existsSync(join(contentDir, 'Data')), `No unpacked game content in ${contentDir}`);
 
 const textures: Record<string, Texture> = {};
+const icons: Record<string, Texture> = {};
 const stringFiles = new Map<string, Record<string, string>>();
 const NAMED_COLORS: Record<string, Rgb> = { white: [255, 255, 255] };
+const CATEGORY_TAGS: Record<number, string> = { [-4]: 'category_fish', [-75]: 'category_vegetable', [-79]: 'category_fruits' };
 
 
 const bodies: Catalog['bodies'] = {
@@ -142,6 +164,8 @@ for (let id = 0; id < ACCESSORY_COUNT; id++) {
 }
 
 
+const tailoring = tailoringRecipes();
+
 const shirts: Shirt[] = Object.entries(readJson<Record<string, ShirtData>>('Data/Shirts')).map(
   ([id, data]) => {
     const what = `shirt ${id}`;
@@ -158,6 +182,7 @@ const shirts: Shirt[] = Object.entries(readJson<Record<string, ShirtData>>('Data
       prismatic: data.IsPrismatic,
       sleeves: data.HasSleeves,
       creation: data.CanChooseDuringCharacterCustomization,
+      tailoring: tailoring.byItem.get(`(S)${id}`) ?? [],
     };
   },
 );
@@ -178,6 +203,7 @@ const pants: Pants[] = Object.entries(readJson<Record<string, ClothingData>>('Da
       dyeable: data.CanBeDyed,
       prismatic: data.IsPrismatic,
       creation: data.CanChooseDuringCharacterCustomization,
+      tailoring: tailoring.byItem.get(`(P)${id}`) ?? [],
     };
   },
 );
@@ -200,6 +226,7 @@ const hats: Hat[] = Object.entries(readJson<Record<string, string>>('Data/hats')
     skipHairOffset: bool(fields[3], what),
     mask: fields[0].includes('Mask') && hairMode !== 'hide',
     prismatic: (fields[4] ?? '').split(/\s+/).includes('Prismatic'),
+    tailoring: tailoring.byItem.get(`(H)${id}`) ?? [],
   };
 });
 
@@ -235,12 +262,14 @@ for (const [items, what] of [
 const catalog: Catalog = {
   gameVersion,
   textures: Object.fromEntries(Object.entries(textures).sort(([a], [b]) => a.localeCompare(b))),
+  icons: Object.fromEntries(Object.entries(icons).sort(([a], [b]) => a.localeCompare(b))),
   bodies,
   skinTones: { texture: skinTexture, count: textures[skinTexture].height },
   shoeColors: { texture: shoeTexture, count: textures[shoeTexture].height, bare: NEW_FARMER_SHOE_COLOR },
   hairstyles,
   hairSprites,
   accessories,
+  cloth: tailoring.cloth,
   shirts,
   pants,
   hats,
@@ -255,7 +284,7 @@ for (const sprite of villagerSprites) check(existsSync(join(contentDir, `${sprit
 
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
-for (const [key, texture] of Object.entries(catalog.textures)) {
+for (const [key, texture] of Object.entries({ ...catalog.textures, ...catalog.icons })) {
   const target = join(root, 'public', texture.path);
   mkdirSync(dirname(target), { recursive: true });
   copyFileSync(join(contentDir, `${key}.png`), target);
@@ -267,9 +296,75 @@ console.log(
   `Catalogue for Stardew Valley ${gameVersion}: ${hairstyles.length} hairstyles, ` +
     `${accessories.length} accessories, ${catalog.skinTones.count} skin tones, ` +
     `${shirts.length} shirts, ${pants.length} pants, ${hats.length} hats, ${boots.length} boots. ` +
-    `Wrote catalog.json, ${Object.keys(textures).length} textures and ${villagerSprites.length} villager sprites to public/assets/.`,
+    `Wrote catalog.json, ${Object.keys(textures).length} textures, ${Object.keys(icons).length} icon sheets ` +
+    `and ${villagerSprites.length} villager sprites to public/assets/.`,
 );
 
+
+function tailoringRecipes(): { cloth: Ingredient; byItem: Map<string, Tailoring[]> } {
+  const objects = Object.entries(readJson<Record<string, ObjectData>>('Data/Objects')).map(([id, data]) => ({
+    id,
+    data,
+    tags: new Set([
+      `id_o_${contextTag(id)}`,
+      `item_${contextTag(data.Name)}`,
+      ...(data.ContextTags ?? []),
+      ...(CATEGORY_TAGS[data.Category] ? [CATEGORY_TAGS[data.Category]] : []),
+    ]),
+  }));
+  type GameObject = (typeof objects)[number];
+  const cloth = objects.find((object) => object.tags.has('item_cloth'));
+  check(cloth, 'Data/Objects has no Cloth');
+  const fits = (object: GameObject, tags: string[]) => tags.every((tag) => object.tags.has(tag));
+  const recipes = readJson<TailoringRecipeData[]>('Data/TailoringRecipes').filter((recipe) => fits(cloth, recipe.FirstItemTags));
+  for (const recipe of recipes) {
+    check(objects.some((object) => fits(object, recipe.SecondItemTags)), `Tailoring ${recipe.Id}: no item has ${recipe.SecondItemTags}`);
+  }
+
+  const used = new Map<TailoringRecipeData, GameObject[]>();
+  for (const object of objects) {
+    const recipe = recipes.find((entry) => fits(object, entry.SecondItemTags));
+    if (recipe) used.set(recipe, [...(used.get(recipe) ?? []), object]);
+  }
+  const names = new Map(
+    [cloth, ...[...used.values()].flat()].map((object) => [object, text(object.data.DisplayName, `object ${object.id}`)]),
+  );
+  const ingredient = (object: GameObject): Ingredient => {
+    let name = names.get(object)!;
+    if ([...names.values()].filter((other) => other === name).length > 1) {
+      const color = [...object.tags].find((tag) => tag.startsWith('color_'));
+      name += ` (${color ? color.slice(6).replaceAll('_', ' ') : object.id})`;
+    }
+    const texture = useTexture(object.data.Texture ?? 'Maps/springobjects', icons);
+    const { x, y } = cell(object.data.SpriteIndex, 16, 16, icons[texture].width);
+    checkFits(texture, x, y, 16, 16, `object ${object.id}`);
+    return { name, icon: { texture, x, y } };
+  };
+
+  const byItem = new Map<string, Tailoring[]>();
+  for (const recipe of recipes) {
+    const matched = used.get(recipe);
+    if (!matched) continue;
+    const male = recipe.CraftedItemIds?.length ? recipe.CraftedItemIds : [recipe.CraftedItemId];
+    const female = recipe.CraftedItemIdFeminine ? [recipe.CraftedItemIdFeminine] : male;
+    for (const id of new Set([...male, ...female])) {
+      check(id && /^\(\w+\)/.test(id), `Tailoring ${recipe.Id}: expected a qualified item id, got "${id}"`);
+      const farmer = !female.includes(id) ? 'male' : !male.includes(id) ? 'female' : undefined;
+      const random = (farmer === 'female' ? female : male).length > 1;
+      const entries = byItem.get(id) ?? [];
+      const items = matched.map(ingredient);
+      const same = entries.find((entry) => entry.farmer === farmer && Boolean(entry.random) === random);
+      if (same) same.items.push(...items.filter((item) => !same.items.some((other) => other.name === item.name)));
+      else entries.push({ items, ...(farmer ? { farmer } : {}), ...(random ? { random } : {}) });
+      byItem.set(id, entries);
+    }
+  }
+  return { cloth: ingredient(cloth), byItem };
+}
+
+function contextTag(value: string): string {
+  return value.trim().toLowerCase().replaceAll(' ', '_').replaceAll("'", '');
+}
 
 function hairVariant(id: number, mode: HairMode): HairVariant {
   const data = hairData.get(id);
@@ -292,12 +387,12 @@ function baseHairSprite(id: number): HairSprite {
   return { texture: hairTexture, ...cell(id, 16, 96, textures[hairTexture].width), uniqueLeft: false };
 }
 
-function useTexture(assetName: string): string {
+function useTexture(assetName: string, into = textures): string {
   const key = assetName.replaceAll('\\', '/');
-  if (!textures[key]) {
+  if (!into[key]) {
     const file = join(contentDir, `${key}.png`);
     check(existsSync(file), `Texture ${key} not found at ${file}`);
-    textures[key] = { path: `assets/${key}.png`, ...readPngSize(file) };
+    into[key] = { path: `assets/${key}.png`, ...readPngSize(file) };
   }
   return key;
 }
@@ -316,7 +411,7 @@ function cell(index: number, cellWidth: number, cellHeight: number, rowWidth: nu
 }
 
 function checkFits(texture: string, x: number, y: number, width: number, height: number, what: string): void {
-  const size = textures[texture];
+  const size = textures[texture] ?? icons[texture];
   check(
     x >= 0 && y >= 0 && x + width <= size.width && y + height <= size.height,
     `${what} lies outside ${texture} (${size.width}×${size.height})`,

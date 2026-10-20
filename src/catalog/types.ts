@@ -48,6 +48,17 @@ interface Item {
   description: string;
 }
 
+export interface Ingredient {
+  name: string;
+  icon: SpriteRef;
+}
+
+export interface Tailoring {
+  items: Ingredient[];
+  farmer?: 'male' | 'female';
+  random?: boolean;
+}
+
 export interface Shirt extends Item {
   sprite: SpriteRef;
   color: Rgb;
@@ -55,6 +66,7 @@ export interface Shirt extends Item {
   prismatic: boolean;
   sleeves: boolean;
   creation: boolean;
+  tailoring: Tailoring[];
 }
 
 export interface Pants extends Item {
@@ -63,6 +75,7 @@ export interface Pants extends Item {
   dyeable: boolean;
   prismatic: boolean;
   creation: boolean;
+  tailoring: Tailoring[];
 }
 
 export interface Hat extends Item {
@@ -71,6 +84,7 @@ export interface Hat extends Item {
   skipHairOffset: boolean;
   mask: boolean;
   prismatic: boolean;
+  tailoring: Tailoring[];
 }
 
 export interface Boots extends Item {
@@ -81,12 +95,14 @@ export interface Boots extends Item {
 export interface Catalog {
   gameVersion: string;
   textures: Record<string, Texture>;
+  icons: Record<string, Texture>;
   bodies: Record<'male' | 'female', { base: string; bald: string }>;
   skinTones: Palette;
   shoeColors: Palette & { bare: number };
   hairstyles: Hairstyle[];
   hairSprites: Record<string, HairSprite>;
   accessories: Accessory[];
+  cloth: Ingredient;
   shirts: Shirt[];
   pants: Pants[];
   hats: Hat[];

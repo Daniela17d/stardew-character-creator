@@ -1,5 +1,5 @@
 import { ACCESSORY_NAMES } from './accessory-names.ts';
-import type { Catalog, Rgb } from './catalog/types.ts';
+import type { Catalog, Ingredient, Rgb, Tailoring } from './catalog/types.ts';
 import { fromHex, toHex } from './color.ts';
 import { createFilter } from './filters.ts';
 import { bootsColors, correctColors, hatColors, pantsColors, shirtColors } from './item-colors.ts';
@@ -19,6 +19,7 @@ interface Choice<T> {
   value: T;
   label?: string;
   caption?: string;
+  details?: () => HTMLElement;
   picture: HTMLElement;
 }
 
@@ -36,6 +37,7 @@ const TORSO = bodyArea(2, 13, 12, 12);
 const LEGS = bodyArea(0, 16, 16, 16);
 const FEET = bodyArea(0, 24, 16, 8);
 const WHOLE_HAT: Rect = { x: 0, y: 0, width: 20 * SCALE, height: 20 * SCALE };
+const ICON_SCALE = 2;
 
 const FACING: Direction[] = ['up', 'right', 'down', 'left'];
 const OUTFIT_CHANGED = 'outfitchange';
@@ -262,7 +264,13 @@ export function createEditor(
     choiceGrid(
       catalog.shirts.map((item, i) => {
         const number = item.creation ? String((item.sprite.y / 32) * 16 + item.sprite.x / 8 + 1) : '';
-        return { value: item.id, label: number, caption: newGameCaption(shirtNames.get(item.id) ?? item.name, number), picture: shirtPictures[i] };
+        return {
+          value: item.id,
+          label: number,
+          caption: newGameCaption(shirtNames.get(item.id) ?? item.name, number),
+          details: () => tailoringDetails(catalog, item.tailoring),
+          picture: shirtPictures[i],
+        };
       }),
       'grid-cols-6',
       () => outfit.shirt,
@@ -315,7 +323,13 @@ export function createEditor(
     choiceGrid(
       catalog.pants.map((item, i) => {
         const number = item.creation ? String((item.sprite.y / 688) * 10 + item.sprite.x / 192 + 1) : '';
-        return { value: item.id, label: number, caption: newGameCaption(pantsNames.get(item.id) ?? item.name, number), picture: pantsPictures[i] };
+        return {
+          value: item.id,
+          label: number,
+          caption: newGameCaption(pantsNames.get(item.id) ?? item.name, number),
+          details: () => tailoringDetails(catalog, item.tailoring),
+          picture: pantsPictures[i],
+        };
       }),
       'grid-cols-6',
       () => outfit.pants,
@@ -357,7 +371,12 @@ export function createEditor(
     choiceGrid<string | null>(
       [
         { value: null, caption: 'None', picture: noneIcon('h-10 w-10') },
-        ...catalog.hats.map((item, i) => ({ value: item.id, caption: hatNames.get(item.id), picture: hatPictures[i] })),
+        ...catalog.hats.map((item, i) => ({
+          value: item.id,
+          caption: hatNames.get(item.id),
+          details: () => tailoringDetails(catalog, item.tailoring),
+          picture: hatPictures[i],
+        })),
       ],
       'grid-cols-7',
       () => outfit.hat,
@@ -464,8 +483,12 @@ function choiceGrid<T>(
   const captioned = choices.some((choice) => choice.caption);
   const caption = document.createElement('p');
   caption.className = 'font-semibold';
+  const details = document.createElement('div');
+  details.className = 'w-0 min-w-full';
   const describe = (value: T) => {
-    caption.textContent = choices.find((choice) => choice.value === value)?.caption ?? '';
+    const choice = choices.find((entry) => entry.value === value);
+    caption.textContent = choice?.caption ?? '';
+    details.replaceChildren(...(choice?.details ? [choice.details()] : []));
   };
 
   const buttons = choices.map((choice) => {
@@ -523,6 +546,7 @@ function choiceGrid<T>(
 
   field.append(grid);
   if (captioned) field.append(caption);
+  if (choices.some((choice) => choice.details)) field.append(details);
   if (note) {
     const text = document.createElement('p');
     text.className = 'text-xs italic text-black/60';
@@ -534,6 +558,44 @@ function choiceGrid<T>(
 
 function newGameCaption(name: string, number: string): string {
   return number ? `${name} · new game #${number}` : name;
+}
+
+function tailoringDetails(catalog: Catalog, recipes: Tailoring[]): HTMLElement {
+  const element = document.createElement('div');
+  element.className = 'flex flex-col gap-1';
+  if (!recipes.length) {
+    element.textContent = 'Not made at the sewing machine.';
+    return element;
+  }
+  for (const { items, farmer, random } of recipes) {
+    const line = document.createElement('p');
+    line.className = 'flex flex-wrap items-center gap-x-2 gap-y-1';
+    line.append('Sewing machine:', ingredient(catalog, catalog.cloth), '+');
+    if (items.length > 2) line.append('one of:');
+    items.forEach((item, i) => {
+      if (i && items.length === 2) line.append('or');
+      line.append(ingredient(catalog, item));
+    });
+    if (farmer) line.append(`(${farmer} farmer)`);
+    if (random) line.append('(random result)');
+    element.append(line);
+  }
+  return element;
+}
+
+function ingredient(catalog: Catalog, { name, icon }: Ingredient): HTMLElement {
+  const sheet = catalog.icons[icon.texture];
+  const picture = document.createElement('span');
+  picture.ariaHidden = 'true';
+  picture.className = 'shrink-0 [image-rendering:pixelated]';
+  picture.style.width = picture.style.height = `${16 * ICON_SCALE}px`;
+  picture.style.backgroundImage = `url(${import.meta.env.BASE_URL}${sheet.path})`;
+  picture.style.backgroundPosition = `-${icon.x * ICON_SCALE}px -${icon.y * ICON_SCALE}px`;
+  picture.style.backgroundSize = `${sheet.width * ICON_SCALE}px ${sheet.height * ICON_SCALE}px`;
+  const chip = document.createElement('span');
+  chip.className = 'flex items-center gap-1';
+  chip.append(picture, name);
+  return chip;
 }
 
 function distinctNames(items: { id: string; name: string }[]): Map<string, string> {
