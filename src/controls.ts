@@ -1,10 +1,12 @@
 import { ACCESSORY_NAMES } from './accessory-names.ts';
 import type { Catalog, Rgb } from './catalog/types.ts';
 import { fromHex, toHex } from './color.ts';
+import { createFilter } from './filters.ts';
+import { bootsColors, hatColors, pantsColors, shirtColors } from './item-colors.ts';
 import type { Outfit } from './outfit.ts';
 import type { Direction } from './render/animation.ts';
 import { BODY_X, BODY_Y, type FarmerRenderer, type Parts } from './render/farmer.ts';
-import { SCALE, type Rect, type Surface } from './render/pixels.ts';
+import { SCALE, type Pixels, type Rect, type Surface } from './render/pixels.ts';
 import { VILLAGERS, villagerOutfit } from './villagers.ts';
 
 export interface ViewState {
@@ -96,11 +98,20 @@ export function createEditor(
   catalog: Catalog,
   state: ViewState,
   renderer: FarmerRenderer,
+  textures: Record<string, Pixels>,
 ): { tabs: HTMLElement; panel: HTMLElement; refresh: () => void } {
   const { outfit } = state;
   const tabs = document.createElement('nav');
   tabs.role = 'tablist';
-  tabs.className = 'flex flex-wrap justify-center gap-2 border-b-2 border-[#8B4513] pb-4';
+  tabs.className = 'flex items-center gap-3 border-b-2 border-[#8B4513] pb-4';
+  const mainTabs = document.createElement('div');
+  mainTabs.className = 'flex flex-1 flex-wrap justify-center gap-2';
+  const divider = document.createElement('span');
+  divider.ariaHidden = 'true';
+  divider.className = 'h-7 w-0.5 bg-[#8B4513]';
+  const sideTabs = document.createElement('div');
+  sideTabs.className = 'flex gap-2';
+  tabs.append(mainTabs, divider, sideTabs);
   const panel = document.createElement('div');
   panel.className = 'min-w-80';
   const sections: { tab: HTMLButtonElement; section: HTMLElement; paint: () => void }[] = [];
@@ -114,7 +125,7 @@ export function createEditor(
     });
   };
 
-  const section = (name: string) => {
+  const section = (name: string, aside = false) => {
     const index = sections.length;
     const tab = document.createElement('button');
     tab.type = 'button';
@@ -125,7 +136,7 @@ export function createEditor(
     const grid = document.createElement('div');
     grid.role = 'tabpanel';
     grid.className = 'grid grid-cols-[6rem_auto] items-start gap-x-3 gap-y-3 text-sm';
-    tabs.append(tab);
+    (aside ? sideTabs : mainTabs).append(tab);
     panel.append(grid);
     const entry = { tab, section: grid, paint: () => {} };
     sections.push(entry);
@@ -260,6 +271,18 @@ export function createEditor(
         outfit.shirtColor = catalog.shirts.find((item) => item.id === id)?.color ?? outfit.shirtColor;
         syncShirtColor();
       },
+      undefined,
+      createFilter(
+        catalog.shirts.map((item) => ({
+          id: item.id,
+          name: shirtNames.get(item.id) ?? item.name,
+          colors: shirtColors(textures, item),
+          anyColor: item.dyeable || item.prismatic,
+          dyeable: item.dyeable,
+          creation: item.creation,
+        })),
+        { dyeable: true, creation: true },
+      ),
     ),
   );
   shirt.row('Colour', shirtColor);
@@ -298,6 +321,18 @@ export function createEditor(
         outfit.pantsColor = catalog.pants.find((item) => item.id === id)?.color ?? outfit.pantsColor;
         syncPantsColor();
       },
+      undefined,
+      createFilter(
+        catalog.pants.map((item) => ({
+          id: item.id,
+          name: pantsNames.get(item.id) ?? item.name,
+          colors: pantsColors(textures, item),
+          anyColor: item.dyeable || item.prismatic,
+          dyeable: item.dyeable,
+          creation: item.creation,
+        })),
+        { dyeable: true, creation: true },
+      ),
     ),
   );
   pants.row('Colour', pantsColor);
@@ -321,6 +356,15 @@ export function createEditor(
       'grid-cols-7',
       () => outfit.hat,
       (id) => (outfit.hat = id),
+      undefined,
+      createFilter(
+        catalog.hats.map((item) => ({
+          id: item.id,
+          name: hatNames.get(item.id) ?? item.name,
+          colors: hatColors(textures, item),
+          anyColor: item.prismatic,
+        })),
+      ),
     ),
   );
   hat.paintWith(
@@ -342,6 +386,15 @@ export function createEditor(
       'grid-cols-6',
       () => outfit.boots,
       (id) => (outfit.boots = id),
+      undefined,
+      createFilter(
+        catalog.boots.map((item) => ({
+          id: item.id,
+          name: bootsNames.get(item.id) ?? item.name,
+          colors: bootsColors(textures, catalog, item),
+          anyColor: false,
+        })),
+      ),
     ),
   );
   boots.paintWith(
@@ -351,7 +404,7 @@ export function createEditor(
     ),
   );
 
-  const villagers = section('Villagers');
+  const villagers = section('Villagers', true);
   const villagerPictures = VILLAGERS.map(() => thumbnail('h-16 w-8'));
   let villager: string | null = null;
   villagers.row(
@@ -389,6 +442,7 @@ function choiceGrid<T>(
   selected: () => T,
   pick: (value: T) => void,
   note?: string,
+  filter?: { bar: HTMLElement; matches: (value: T) => boolean; onChange: (listener: () => void) => void },
 ): HTMLElement {
   const field = document.createElement('div');
   field.className = 'flex flex-col gap-2';
@@ -432,6 +486,28 @@ function choiceGrid<T>(
   };
   sync();
   document.addEventListener(OUTFIT_CHANGED, sync);
+
+  if (filter) {
+    const count = document.createElement('p');
+    count.className = 'text-xs text-black/60';
+    const apply = () => {
+      let shown = 0;
+      let total = 0;
+      buttons.forEach((button, i) => {
+        const value = choices[i].value;
+        const visible = filter.matches(value);
+        button.hidden = !visible;
+        if (value !== null) {
+          total++;
+          if (visible) shown++;
+        }
+      });
+      count.textContent = shown === total ? `${total} items` : shown ? `${shown} of ${total}` : 'Nothing matches these filters.';
+    };
+    filter.onChange(apply);
+    apply();
+    field.append(filter.bar, count);
+  }
 
   field.append(grid);
   if (captioned) field.append(caption);

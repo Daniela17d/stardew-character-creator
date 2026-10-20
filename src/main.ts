@@ -7,7 +7,8 @@ import { loadTextures } from './render/textures.ts';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const catalog = await loadCatalog();
-const renderer = new FarmerRenderer(catalog, await loadTextures(catalog));
+const textures = await loadTextures(catalog);
+const renderer = new FarmerRenderer(catalog, textures);
 
 const state: ViewState = { outfit: newFarmer(catalog), direction: 'down', walking: false };
 
@@ -17,7 +18,7 @@ canvas.height = FRAME_HEIGHT;
 canvas.className = 'h-[288px] w-[160px] [image-rendering:pixelated]';
 const context = canvas.getContext('2d')!;
 
-const { tabs, panel, refresh } = createEditor(catalog, state, renderer);
+const { tabs, panel, refresh } = createEditor(catalog, state, renderer, textures);
 const content = document.createElement('div');
 content.className = 'flex flex-col items-center gap-8 md:flex-row md:items-start';
 content.append(createPreview(canvas, state), panel);
