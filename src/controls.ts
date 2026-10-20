@@ -2,7 +2,7 @@ import { ACCESSORY_NAMES } from './accessory-names.ts';
 import type { Catalog, Rgb } from './catalog/types.ts';
 import { fromHex, toHex } from './color.ts';
 import { createFilter } from './filters.ts';
-import { bootsColors, hatColors, pantsColors, shirtColors } from './item-colors.ts';
+import { bootsColors, correctColors, hatColors, pantsColors, shirtColors } from './item-colors.ts';
 import type { Outfit } from './outfit.ts';
 import type { Direction } from './render/animation.ts';
 import { BODY_X, BODY_Y, type FarmerRenderer, type Parts } from './render/farmer.ts';
@@ -273,14 +273,17 @@ export function createEditor(
       },
       undefined,
       createFilter(
-        catalog.shirts.map((item) => ({
-          id: item.id,
-          name: shirtNames.get(item.id) ?? item.name,
-          colors: shirtColors(textures, item),
-          anyColor: item.dyeable || item.prismatic,
-          dyeable: item.dyeable,
-          creation: item.creation,
-        })),
+        correctColors(
+          'shirts',
+          catalog.shirts.map((item) => ({
+            id: item.id,
+            name: shirtNames.get(item.id) ?? item.name,
+            colors: shirtColors(textures, item),
+            anyColor: item.dyeable || item.prismatic,
+            dyeable: item.dyeable,
+            creation: item.creation,
+          })),
+        ),
         { dyeable: true, creation: true },
       ),
     ),
@@ -323,14 +326,17 @@ export function createEditor(
       },
       undefined,
       createFilter(
-        catalog.pants.map((item) => ({
-          id: item.id,
-          name: pantsNames.get(item.id) ?? item.name,
-          colors: pantsColors(textures, item),
-          anyColor: item.dyeable || item.prismatic,
-          dyeable: item.dyeable,
-          creation: item.creation,
-        })),
+        correctColors(
+          'pants',
+          catalog.pants.map((item) => ({
+            id: item.id,
+            name: pantsNames.get(item.id) ?? item.name,
+            colors: pantsColors(textures, item),
+            anyColor: item.dyeable || item.prismatic,
+            dyeable: item.dyeable,
+            creation: item.creation,
+          })),
+        ),
         { dyeable: true, creation: true },
       ),
     ),
@@ -358,12 +364,15 @@ export function createEditor(
       (id) => (outfit.hat = id),
       undefined,
       createFilter(
-        catalog.hats.map((item) => ({
-          id: item.id,
-          name: hatNames.get(item.id) ?? item.name,
-          colors: hatColors(textures, item),
-          anyColor: item.prismatic,
-        })),
+        correctColors(
+          'hats',
+          catalog.hats.map((item) => ({
+            id: item.id,
+            name: hatNames.get(item.id) ?? item.name,
+            colors: hatColors(textures, item),
+            anyColor: item.prismatic,
+          })),
+        ),
       ),
     ),
   );
@@ -388,12 +397,15 @@ export function createEditor(
       (id) => (outfit.boots = id),
       undefined,
       createFilter(
-        catalog.boots.map((item) => ({
-          id: item.id,
-          name: bootsNames.get(item.id) ?? item.name,
-          colors: bootsColors(textures, catalog, item),
-          anyColor: false,
-        })),
+        correctColors(
+          'boots',
+          catalog.boots.map((item) => ({
+            id: item.id,
+            name: bootsNames.get(item.id) ?? item.name,
+            colors: bootsColors(textures, catalog, item),
+            anyColor: false,
+          })),
+        ),
       ),
     ),
   );

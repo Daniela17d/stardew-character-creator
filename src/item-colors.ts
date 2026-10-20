@@ -1,4 +1,5 @@
 import type { Boots, Catalog, Hat, Pants, Rgb, Shirt } from './catalog/types.ts';
+import corrections from './item-colors.json';
 import type { Pixels } from './render/pixels.ts';
 
 export type ColorName = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'brown' | 'black' | 'grey' | 'white';
@@ -17,12 +18,26 @@ export const COLORS: { name: ColorName; swatch: string }[] = [
   { name: 'white', swatch: '#fafafa' },
 ];
 
-const MIN_SHARE = 0.2;
-const MIN_SHARE_DARK = 0.3;
-const MIN_SHARE_BROWN = 0.2;
-const MIN_SHARE_SECONDARY = 0.3;
+const MIN_SHARE = 0.3;
+
+const NAME_WORDS: Record<string, ColorName> = { gray: 'grey', gold: 'yellow', golden: 'yellow' };
 
 type Grid = (Rgb | null)[][];
+
+export function correctColors<T extends { name: string; colors: Set<ColorName> }>(
+  kind: keyof typeof corrections,
+  items: T[],
+): T[] {
+  const listed: Record<string, string[]> = corrections[kind];
+  for (const [name, colors] of Object.entries(listed)) {
+    if (!items.some((item) => item.name === name)) console.warn(`item-colors.json: no ${kind} called "${name}"`);
+    for (const color of colors) if (!isColorName(color)) console.warn(`item-colors.json: ${name}: unknown colour "${color}"`);
+  }
+  return items.map((item) => ({
+    ...item,
+    colors: new Set(listed[item.name]?.filter(isColorName) ?? [...item.colors, ...namedColors(item.name)]),
+  }));
+}
 
 export function shirtColors(textures: Record<string, Pixels>, shirt: Shirt): Set<ColorName> {
   const texture = textures[shirt.sprite.texture];
@@ -59,7 +74,7 @@ export function bootsColors(textures: Record<string, Pixels>, catalog: Catalog, 
     const color = pixel(texture, i, boots.colorIndex);
     return [color[0], color[1], color[2]];
   });
-  return classify(colors, 0.3);
+  return classify(colors);
 }
 
 export function colorName([red, green, blue]: Rgb): ColorName {
@@ -80,6 +95,18 @@ export function colorName([red, green, blue]: Rgb): ColorName {
   return 'pink';
 }
 
+function namedColors(name: string): ColorName[] {
+  return name
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .map((word) => (isColorName(word) ? word : NAME_WORDS[word]))
+    .filter((color) => color !== undefined);
+}
+
+function isColorName(word: string): word is ColorName {
+  return COLORS.some(({ name }) => name === word);
+}
+
 function sample(width: number, height: number, at: (x: number, y: number) => Rgb | null): Grid {
   return Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => at(x, y)));
 }
@@ -97,21 +124,18 @@ function withoutOutline(grid: Grid): Rgb[] {
   return colors;
 }
 
-function classify(colors: Rgb[], minShare = MIN_SHARE): Set<ColorName> {
+function classify(colors: Rgb[]): Set<ColorName> {
   const counts = new Map<ColorName, number>();
   for (const color of colors) {
     const name = colorName(color);
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
-  const result = new Set<ColorName>();
-  [...counts]
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([name, count], rank) => {
-      const share = count / colors.length;
-      const needed = name === 'grey' ? MIN_SHARE_DARK : name === 'brown' ? MIN_SHARE_BROWN : 0;
-      if (share >= Math.max(minShare, needed, rank === 0 ? 0 : MIN_SHARE_SECONDARY)) result.add(name);
-    });
-  return result;
+  return new Set(
+    [...counts]
+      .sort((a, b) => b[1] - a[1])
+      .filter(([, count], rank) => rank === 0 || count / colors.length >= MIN_SHARE)
+      .map(([name]) => name),
+  );
 }
 
 function hueOf(red: number, green: number, blue: number): number {
