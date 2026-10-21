@@ -6,3 +6,35 @@ body {
     background-attachment: fixed;
     background-size: cover;
 }
+
+.color-bar {
+    appearance: none;
+    height: 0.5rem;
+    border-radius: 9999px;
+    cursor: pointer;
+}
+
+.color-bar:disabled {
+    cursor: not-allowed;
+}
+
+.color-bar::-moz-range-track {
+    background: transparent;
+}
+
+.color-bar::-webkit-slider-thumb {
+    appearance: none;
+    width: 0.75rem;
+    height: 1.125rem;
+    border: 2px solid #5b2b0a;
+    border-radius: 0.25rem;
+    background: #d97a2b;
+}
+
+.color-bar::-moz-range-thumb {
+    width: 0.75rem;
+    height: 1.125rem;
+    border: 2px solid #5b2b0a;
+    border-radius: 0.25rem;
+    background: #d97a2b;
+}

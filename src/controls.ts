@@ -1,6 +1,6 @@
 import { ACCESSORY_NAMES } from './accessory-names.ts';
 import type { Catalog, Ingredient, Rgb, Source, Tailoring } from './catalog/types.ts';
-import { fromHex, toHex } from './color.ts';
+import { barsToRgb, hsvToRgb, rgbToBars, toHex, type Bars } from './color.ts';
 import { createFilter } from './filters.ts';
 import { bootsColors, correctColors, hatColors, pantsColors, shirtColors } from './item-colors.ts';
 import SOURCE_NOTES from './item-sources.json';
@@ -42,6 +42,8 @@ const ICON_SCALE = 2;
 
 const FACING: Direction[] = ['up', 'right', 'down', 'left'];
 const OUTFIT_CHANGED = 'outfitchange';
+const BAR_NAMES = ['Hue', 'Saturation', 'Value'];
+const BAR_MAX = 99;
 
 export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTMLElement {
   const preview = document.createElement('div');
@@ -179,12 +181,13 @@ export function createEditor(
   );
   body.row(
     'Eyes',
-    colorInput(
+    colorBars(
       () => outfit.eyeColor,
       (value) => {
         outfit.eyeColor = value;
       },
-    ),
+      'In game: new game or the Shrine of Illusions.',
+    ).field,
   );
   const accessoryPictures = catalog.accessories.map(() => thumbnail('h-10 w-8'));
   body.row(
@@ -234,12 +237,13 @@ export function createEditor(
   );
   hair.row(
     'Colour',
-    colorInput(
+    colorBars(
       () => outfit.hairColor,
       (value) => {
         outfit.hairColor = value;
       },
-    ),
+      'In game: new game or the Shrine of Illusions.',
+    ).field,
   );
   hair.paintWith(
     whenChanged(
@@ -252,15 +256,16 @@ export function createEditor(
   );
 
   const shirt = section('Shirt');
-  const shirtColor = colorInput(
+  const shirtColor = colorBars(
     () => outfit.shirtColor,
     (value) => {
       outfit.shirtColor = value;
     },
+    "In game: Emily's dye pots.",
   );
   const syncShirtColor = () => {
-    shirtColor.disabled = !catalog.shirts.find((item) => item.id === outfit.shirt)?.dyeable;
-    shirtColor.value = toHex(outfit.shirtColor);
+    shirtColor.field.disabled = !catalog.shirts.find((item) => item.id === outfit.shirt)?.dyeable;
+    shirtColor.sync();
   };
   document.addEventListener(OUTFIT_CHANGED, syncShirtColor);
   const shirtPictures = catalog.shirts.map(() => thumbnail('h-12 w-12'));
@@ -303,7 +308,7 @@ export function createEditor(
       ),
     ),
   );
-  shirt.row('Colour', shirtColor);
+  shirt.row('Colour', shirtColor.field);
   syncShirtColor();
   shirt.paintWith(
     whenChanged(
@@ -313,15 +318,15 @@ export function createEditor(
   );
 
   const pants = section('Pants');
-  const pantsColor = colorInput(
+  const pantsColor = colorBars(
     () => outfit.pantsColor,
     (value) => {
       outfit.pantsColor = value;
     },
+    "In game: new game or Emily's dye pots.",
   );
   const syncPantsColor = () => {
-    pantsColor.disabled = !catalog.pants.find((item) => item.id === outfit.pants)?.dyeable;
-    pantsColor.value = toHex(outfit.pantsColor);
+    pantsColor.field.disabled = !catalog.pants.find((item) => item.id === outfit.pants)?.dyeable;
   };
   document.addEventListener(OUTFIT_CHANGED, syncPantsColor);
   const pantsPictures = catalog.pants.map(() => thumbnail('h-12 w-12'));
@@ -342,7 +347,6 @@ export function createEditor(
       () => outfit.pants,
       (id) => {
         outfit.pants = id;
-        outfit.pantsColor = catalog.pants.find((item) => item.id === id)?.color ?? outfit.pantsColor;
         syncPantsColor();
       },
       undefined,
@@ -364,7 +368,7 @@ export function createEditor(
       ),
     ),
   );
-  pants.row('Colour', pantsColor);
+  pants.row('Colour', pantsColor.field);
   syncPantsColor();
   pants.paintWith(
     whenChanged(
@@ -706,12 +710,67 @@ function drawSprite(canvas: HTMLCanvasElement, url: string): void {
   image.src = url;
 }
 
-function colorInput(get: () => Rgb, set: (value: Rgb) => void): HTMLInputElement {
-  const element = document.createElement('input');
-  element.type = 'color';
-  element.value = toHex(get());
-  element.className = 'h-8 w-10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30';
-  element.addEventListener('input', () => set(fromHex(element.value)));
-  document.addEventListener(OUTFIT_CHANGED, () => (element.value = toHex(get())));
-  return element;
+function colorBars(
+  get: () => Rgb,
+  set: (value: Rgb) => void,
+  note: string,
+): { field: HTMLFieldSetElement; sync: () => void } {
+  const field = document.createElement('fieldset');
+  field.className = 'flex flex-col gap-1 pt-1 disabled:opacity-30';
+  let bars: Bars = [0, 0, 0];
+  let shown: Rgb | undefined;
+  const sliders = BAR_NAMES.map((name, i) => {
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.max = String(BAR_MAX);
+    input.ariaLabel = name;
+    input.className = 'color-bar w-40';
+    const number = document.createElement('span');
+    number.className = 'w-7 text-right font-semibold tabular-nums';
+    input.addEventListener('input', () => {
+      bars[i] = Number(input.value);
+      shown = barsToRgb(bars);
+      set(shown);
+      draw();
+    });
+    const letter = document.createElement('span');
+    letter.ariaHidden = 'true';
+    letter.title = name;
+    letter.className = 'w-3 text-xs font-semibold text-black/60';
+    letter.textContent = name[0];
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2';
+    row.append(letter, input, number);
+    field.append(row);
+    return { input, number };
+  });
+  sliders[0].input.style.background = gradient((step) => hsvToRgb(step * 360, 0.9, 0.9));
+  const draw = () => {
+    const [hue, saturation, value] = bars;
+    sliders[1].input.style.background = gradient((step) => hsvToRgb((hue / 100) * 360, step, value / 100));
+    sliders[2].input.style.background = gradient((step) => hsvToRgb((hue / 100) * 360, saturation / 100, step));
+    sliders.forEach(({ input, number }, i) => {
+      input.value = String(bars[i]);
+      number.textContent = String(bars[i]);
+    });
+  };
+  const sync = () => {
+    if (get().join() !== shown?.join()) {
+      bars = rgbToBars(get()).map((bar) => Math.min(BAR_MAX, bar)) as Bars;
+      shown = barsToRgb(bars);
+      set(shown);
+    }
+    draw();
+  };
+  const hint = document.createElement('p');
+  hint.className = 'text-xs italic text-black/60';
+  hint.textContent = note;
+  field.append(hint);
+  sync();
+  document.addEventListener(OUTFIT_CHANGED, sync);
+  return { field, sync };
+}
+
+function gradient(color: (step: number) => Rgb): string {
+  return `linear-gradient(to right, ${Array.from({ length: 24 }, (_, i) => toHex(color(i / 24))).join(', ')})`;
 }

@@ -98,7 +98,7 @@ export class FarmerRenderer {
     const boots = parts.boots == null ? undefined : this.get(this.boots, parts.boots);
     const accessory = parts.accessory == null ? undefined : this.catalog.accessories[parts.accessory];
     const hairColor = parts.hairColor ?? WHITE;
-    const shirtColor = parts.shirtColor ?? shirt?.color ?? WHITE;
+    const shirtColor = shirt?.dyeable ? (parts.shirtColor ?? shirt.color) : (shirt?.color ?? WHITE);
     const variant = style?.variants[hat?.hairMode ?? 'show'];
     const texture = this.catalog.bodies[parts.male ? 'male' : 'female'][variant?.bald ? 'bald' : 'base'];
     const colors = this.bodyColors(texture, parts, shirt, shirt?.prismatic ? prismaticColor(0) : shirtColor, boots);
@@ -122,7 +122,10 @@ export class FarmerRenderer {
         rect: { ...sprite, x: sprite.x + pants.sprite.x + (parts.male ? 0 : 96), y: sprite.y + pants.sprite.y },
         x,
         y,
-        options: { flip, tint: pants.prismatic ? prismaticColor(time) : (parts.pantsColor ?? pants.color) },
+        options: {
+          flip,
+          tint: pants.prismatic ? prismaticColor(time) : pants.dyeable ? (parts.pantsColor ?? pants.color) : pants.color,
+        },
       });
     }
 
