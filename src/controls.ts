@@ -43,6 +43,7 @@ const ICON_SCALE = 2;
 const FACING: Direction[] = ['up', 'right', 'down', 'left'];
 const OUTFIT_CHANGED = 'outfitchange';
 export const BAR_NAMES = ['Hue', 'Saturation', 'Value'];
+const previews = new WeakMap<HTMLElement, () => void>();
 
 export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTMLElement {
   const preview = document.createElement('div');
@@ -103,7 +104,7 @@ export function createEditor(
   state: ViewState,
   renderer: FarmerRenderer,
   textures: Record<string, Pixels>,
-): { tabs: HTMLElement; panel: HTMLElement; refresh: () => void } {
+): { tabs: HTMLElement; panel: HTMLElement; howTo: HTMLElement; refresh: () => void } {
   const { outfit } = state;
   const tabs = document.createElement('nav');
   tabs.role = 'tablist';
@@ -121,12 +122,34 @@ export function createEditor(
   const sections: { tab: HTMLButtonElement; section: HTMLElement; paint: () => void }[] = [];
   let active = 0;
 
+  const howTo = document.createElement('div');
+  howTo.className = 'flex flex-col gap-3 text-sm';
+  const howToTitle = document.createElement('h2');
+  howToTitle.className = 'text-lg font-bold';
+  howToTitle.textContent = 'How to get';
+  const howToHint = document.createElement('p');
+  howToHint.className = 'text-black/60';
+  howToHint.textContent = 'Hover or pick a shirt, pants, hat or boots to see how to get it.';
+  howTo.append(howToTitle, howToHint);
+  const wide = matchMedia('(min-width: 1500px)');
+  let infos: { info: HTMLElement; home: HTMLElement; next: ChildNode | null; redraw?: () => void }[][] = [];
+  const placeDetails = () => {
+    infos.forEach((boxes, i) =>
+      boxes.forEach(({ info, home, next }) => {
+        if (wide.matches && i === active) howTo.append(info);
+        else if (info.parentElement !== home) home.insertBefore(info, next);
+      }),
+    );
+    howToHint.hidden = infos[active]?.length > 0;
+  };
+
   const show = (index: number) => {
     active = index;
     sections.forEach(({ tab, section }, i) => {
       tab.ariaSelected = String(i === index);
       section.hidden = i !== index;
     });
+    placeDetails();
   };
 
   const section = (name: string, aside = false) => {
@@ -490,8 +513,25 @@ export function createEditor(
     ),
   );
 
+  infos = sections.map(({ section }) =>
+    [...section.querySelectorAll<HTMLElement>('[data-details]')].map((info) => ({
+      info,
+      home: info.parentElement!,
+      next: info.nextSibling,
+      redraw: previews.get(info),
+    })),
+  );
+  wide.addEventListener('change', placeDetails);
   show(0);
-  return { tabs, panel, refresh: () => sections[active].paint() };
+  return {
+    tabs,
+    panel,
+    howTo,
+    refresh: () => {
+      sections[active].paint();
+      if (wide.matches) infos[active].forEach(({ redraw }) => redraw?.());
+    },
+  };
 }
 
 function choiceGrid<T>(
@@ -512,10 +552,30 @@ function choiceGrid<T>(
   caption.className = 'font-semibold';
   const details = document.createElement('div');
   details.className = 'w-0 min-w-full';
+  const preview = document.createElement('canvas');
+  preview.className = 'hidden self-start [image-rendering:pixelated] min-[1500px]:block';
+  let described: Choice<T> | undefined;
+  const drawPreview = () => {
+    const source = described?.picture;
+    if (!(source instanceof HTMLCanvasElement) || !source.width) {
+      preview.hidden = true;
+      return;
+    }
+    preview.hidden = false;
+    if (preview.width !== source.width || preview.height !== source.height) {
+      preview.width = source.width;
+      preview.height = source.height;
+      preview.style.width = `${source.width * 1.5}px`;
+    }
+    const context = preview.getContext('2d')!;
+    context.clearRect(0, 0, preview.width, preview.height);
+    context.drawImage(source, 0, 0);
+  };
   const describe = (value: T) => {
-    const choice = choices.find((entry) => entry.value === value);
-    caption.textContent = choice?.caption ?? '';
-    details.replaceChildren(...(choice?.details ? [choice.details()] : []));
+    described = choices.find((entry) => entry.value === value);
+    caption.textContent = described?.caption ?? '';
+    details.replaceChildren(...(described?.details ? [described.details()] : []));
+    drawPreview();
   };
 
   const buttons = choices.map((choice) => {
@@ -572,8 +632,14 @@ function choiceGrid<T>(
   }
 
   field.append(grid);
-  if (captioned) field.append(caption);
-  if (choices.some((choice) => choice.details)) field.append(details);
+  if (choices.some((choice) => choice.details)) {
+    const info = document.createElement('div');
+    info.className = 'flex flex-col gap-2';
+    info.dataset.details = '';
+    info.append(preview, caption, details);
+    previews.set(info, drawPreview);
+    field.append(info);
+  } else if (captioned) field.append(caption);
   if (note) {
     const text = document.createElement('p');
     text.className = 'text-xs italic text-black/60';
