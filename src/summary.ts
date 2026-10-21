@@ -3,7 +3,6 @@ import type { Catalog } from './catalog/types.ts';
 import { BAR_MAX, barsToRgb, toHex, type Bars } from './color.ts';
 import {
   BAR_NAMES,
-  BUTTON,
   FEET,
   LEGS,
   TORSO,
@@ -22,7 +21,6 @@ import type { Rect, Surface } from './render/pixels.ts';
 
 interface Line {
   label: string;
-  copy: string;
   value: HTMLElement;
   color?: Bars;
 }
@@ -34,31 +32,20 @@ export function createSummary(
 ): { panel: HTMLElement; refresh: () => void } {
   const panel = document.createElement('div');
   panel.className = 'flex flex-col gap-4';
-  const header = document.createElement('div');
-  header.className = 'flex items-center justify-between gap-3';
   const title = document.createElement('h2');
   title.className = 'text-lg font-bold';
   title.textContent = 'Summary';
-  const copy = document.createElement('button');
-  copy.type = 'button';
-  copy.className = `px-3 py-1 text-sm font-semibold ${BUTTON}`;
-  copy.textContent = 'Copy';
-  header.append(title, copy);
-  const list = document.createElement('dl');
-  list.className = 'grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm';
-  panel.append(header, list);
+  const table = document.createElement('table');
+  table.className = 'w-full text-sm';
+  const body = document.createElement('tbody');
+  body.className = 'divide-y divide-black/15';
+  table.append(body);
+  panel.append(title, table);
 
   const shirtNames = itemLabels(catalog.shirts);
   const pantsNames = itemLabels(catalog.pants);
   const hatNames = itemLabels(catalog.hats);
   const bootsNames = itemLabels(catalog.boots);
-  let lines: Line[] = [];
-
-  copy.addEventListener('click', async () => {
-    await navigator.clipboard.writeText(lines.map((line) => line.copy).join('\n'));
-    copy.textContent = 'Copied';
-    setTimeout(() => (copy.textContent = 'Copy'), 1500);
-  });
 
   const refresh = whenChanged(
     () => [state.outfit],
@@ -70,7 +57,7 @@ export function createSummary(
       const hat = catalog.hats.find((item) => item.id === outfit.hat);
       const boots = catalog.boots.find((item) => item.id === outfit.boots);
 
-      lines = [
+      const lines: Line[] = [
         plainLine('Gender', outfit.male ? 'Male' : 'Female'),
         plainLine('Skin', String(outfit.skin + 1)),
         barsLine('Eye colour', outfit.eyeColor),
@@ -113,10 +100,11 @@ export function createSummary(
           : plainLine('Boots', 'None'),
       );
 
-      list.replaceChildren(
-        ...lines.flatMap(({ label, value, color }) => {
-          const term = document.createElement('dt');
-          term.className = 'font-semibold';
+      body.replaceChildren(
+        ...lines.map(({ label, value, color }) => {
+          const term = document.createElement('th');
+          term.scope = 'row';
+          term.className = 'py-2 pr-4 text-left align-middle font-semibold';
           term.textContent = label;
           if (color) {
             const swatch = document.createElement('span');
@@ -124,7 +112,12 @@ export function createSummary(
             swatch.style.background = toHex(barsToRgb(color));
             term.append(swatch);
           }
-          return [term, value];
+          const cell = document.createElement('td');
+          cell.className = 'py-2 align-middle';
+          cell.append(value);
+          const row = document.createElement('tr');
+          row.append(term, cell);
+          return row;
         }),
       );
     },
@@ -133,9 +126,9 @@ export function createSummary(
 }
 
 function plainLine(label: string, text: string): Line {
-  const value = document.createElement('dd');
+  const value = document.createElement('div');
   value.textContent = text;
-  return { label, copy: `${label}: ${text}`, value };
+  return { label, value };
 }
 
 function numberLine(label: string, number: string, name: string): Line {
@@ -145,20 +138,20 @@ function numberLine(label: string, number: string, name: string): Line {
   const muted = document.createElement('span');
   muted.className = 'text-black/60';
   muted.textContent = ` · ${name}`;
-  const value = document.createElement('dd');
+  const value = document.createElement('div');
   value.append(strong, muted);
-  return { label, copy: `${label}: ${number} · ${name}`, value };
+  return { label, value };
 }
 
 function pictureLine(label: string, name: string, picture: HTMLElement): Line {
-  const value = document.createElement('dd');
+  const value = document.createElement('div');
   value.className = 'flex items-center gap-2';
   value.append(picture, name);
-  return { label, copy: `${label}: ${name}`, value };
+  return { label, value };
 }
 
 function barsLine(label: string, bars: Bars): Line {
-  const value = document.createElement('dd');
+  const value = document.createElement('div');
   value.className = 'flex flex-col gap-1.5';
   BAR_NAMES.forEach((name, i) => {
     const letter = document.createElement('span');
@@ -181,8 +174,7 @@ function barsLine(label: string, bars: Bars): Line {
     row.append(letter, track, number);
     value.append(row);
   });
-  const copy = [`${label}:`, ...BAR_NAMES.map((name, i) => `  ${name[0]}: ${bars[i]}`)].join('\n');
-  return { label, copy, value, color: bars };
+  return { label, value, color: bars };
 }
 
 function picture(surface: Surface, area: Rect, size: string): HTMLCanvasElement {

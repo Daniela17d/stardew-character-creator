@@ -1,6 +1,6 @@
 import type { Catalog } from './catalog/types.ts';
 import { BAR_MAX, rgbToBars, type Bars } from './color.ts';
-import { BUTTON, whenChanged, type ViewState } from './controls.ts';
+import { iconButton, whenChanged, type ViewState } from './controls.ts';
 import { farmerParts, newFarmer, type Outfit } from './outfit.ts';
 import type { FarmerRenderer } from './render/farmer.ts';
 
@@ -69,9 +69,12 @@ export function syncUrl(catalog: Catalog, state: ViewState): () => void {
 export function createShareControls(catalog: Catalog, state: ViewState, renderer: FarmerRenderer): HTMLElement {
   const native = 'share' in navigator && matchMedia('(pointer: coarse)').matches;
   const controls = document.createElement('div');
-  controls.className = 'flex gap-2';
+  controls.className = 'flex items-center gap-4';
+  const status = document.createElement('span');
+  status.role = 'status';
+  status.className = 'w-0 text-xs font-semibold whitespace-nowrap';
 
-  const download = shareButton('Download PNG');
+  const download = iconButton('Download PNG', 'down', 3, 'transition-transform hover:scale-110');
   download.addEventListener('click', async () => {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(await farmerPng(renderer, state));
@@ -80,8 +83,7 @@ export function createShareControls(catalog: Catalog, state: ViewState, renderer
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   });
 
-  const label = native ? 'Share' : 'Copy link';
-  const share = shareButton(label);
+  const share = iconButton(native ? 'Share' : 'Copy link', 'letter', 3, 'transition-transform hover:scale-110');
   share.addEventListener('click', async () => {
     const url = new URL(shareLink(catalog, state.outfit), location.href).href;
     if (native) {
@@ -89,11 +91,11 @@ export function createShareControls(catalog: Catalog, state: ViewState, renderer
       return;
     }
     await navigator.clipboard.writeText(url);
-    share.textContent = 'Copied';
-    setTimeout(() => (share.textContent = label), 1500);
+    status.textContent = 'Link copied';
+    setTimeout(() => (status.textContent = ''), 1500);
   });
 
-  controls.append(download, share);
+  controls.append(download, share, status);
   return controls;
 }
 
@@ -128,12 +130,4 @@ async function farmerPng(renderer: FarmerRenderer, state: ViewState): Promise<Bl
   context.imageSmoothingEnabled = false;
   context.drawImage(frame, left, top, right - left, bottom - top, 0, 0, image.width, image.height);
   return image.convertToBlob({ type: 'image/png' });
-}
-
-function shareButton(text: string): HTMLButtonElement {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = `px-3 py-1 text-sm font-semibold ${BUTTON}`;
-  button.textContent = text;
-  return button;
 }

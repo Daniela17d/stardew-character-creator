@@ -19,6 +19,20 @@ export interface Filter {
   onChange: (listener: () => void) => void;
 }
 
+export function gameCheckbox(box: HTMLInputElement, size: number): HTMLImageElement {
+  box.classList.add('peer', 'sr-only');
+  const icon = new Image(size, size);
+  icon.alt = '';
+  icon.className =
+    '[image-rendering:pixelated] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#8B4513]';
+  const sync = () => {
+    icon.src = `${import.meta.env.BASE_URL}ui/${box.checked ? 'checkbox-on' : 'checkbox'}.png`;
+  };
+  box.addEventListener('change', sync);
+  sync();
+  return icon;
+}
+
 export function createFilter(
   items: FilterItem[],
   options: { dyeable?: boolean; creation?: boolean; obtain?: boolean } = {},
@@ -35,11 +49,21 @@ export function createFilter(
   const search = document.createElement('input');
   search.type = 'search';
   search.placeholder = 'Search by name';
-  search.className = 'w-full rounded border border-black/20 bg-white px-2 py-1';
+  search.ariaLabel = 'Search by name';
+  search.className =
+    'h-9 min-w-0 flex-1 border-x-[12px] border-y-0 border-solid bg-transparent px-1 [image-rendering:pixelated] placeholder:text-black/50';
+  search.style.borderImage = `url(${import.meta.env.BASE_URL}ui/text-box.png) 0 16 fill / 0 12px stretch`;
   search.addEventListener('input', () => {
     query = search.value.trim().toLowerCase();
     changed();
   });
+  const magnifier = new Image(32, 32);
+  magnifier.src = `${import.meta.env.BASE_URL}ui/search.png`;
+  magnifier.alt = '';
+  magnifier.className = '[image-rendering:pixelated]';
+  const searchRow = document.createElement('div');
+  searchRow.className = 'flex items-center gap-2';
+  searchRow.append(magnifier, search);
 
   const swatches = document.createElement('div');
   swatches.className = 'flex flex-wrap items-center gap-1';
@@ -62,7 +86,7 @@ export function createFilter(
 
   const bar = document.createElement('div');
   bar.className = 'flex flex-col gap-2';
-  bar.append(search, swatches);
+  bar.append(searchRow, swatches);
 
   const extras: HTMLElement[] = [];
   if (options.dyeable) extras.push(dyeChoice());
@@ -107,7 +131,7 @@ export function createFilter(
       button.type = 'button';
       button.textContent = label;
       button.className =
-        'rounded border border-black/20 bg-white px-2 py-0.5 hover:bg-white/70 aria-pressed:bg-black aria-pressed:text-white';
+        'rounded border-2 border-transparent bg-white/50 px-2 py-0.5 font-semibold hover:bg-white aria-pressed:border-[#8B4513] aria-pressed:bg-white';
       button.addEventListener('click', () => {
         dye = value;
         sync();
@@ -123,15 +147,14 @@ export function createFilter(
 
   function checkbox(label: string, set: (on: boolean) => void): HTMLLabelElement {
     const element = document.createElement('label');
-    element.className = 'flex items-center gap-2';
+    element.className = 'flex cursor-pointer items-center gap-2';
     const box = document.createElement('input');
     box.type = 'checkbox';
-    box.className = 'h-4 w-4';
     box.addEventListener('change', () => {
       set(box.checked);
       changed();
     });
-    element.append(box, label);
+    element.append(box, gameCheckbox(box, 18), label);
     return element;
   }
 

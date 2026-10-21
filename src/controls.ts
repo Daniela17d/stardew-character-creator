@@ -1,10 +1,11 @@
 import { ACCESSORY_NAMES } from './accessory-names.ts';
 import type { Catalog, Ingredient, Pants, Shirt, Source, Tailoring } from './catalog/types.ts';
 import { BAR_MAX, barsToRgb, hsvToRgb, rgbToBars, toHex, type Bars } from './color.ts';
-import { createFilter } from './filters.ts';
+import { createFilter, gameCheckbox } from './filters.ts';
+import { randomOutfit } from './random.ts';
 import { bootsColors, correctColors, hatColors, pantsColors, shirtColors } from './item-colors.ts';
 import SOURCE_NOTES from './item-sources.json';
-import type { Outfit } from './outfit.ts';
+import { farmerParts, newFarmer, type Outfit } from './outfit.ts';
 import type { Direction } from './render/animation.ts';
 import { BODY_X, BODY_Y, type FarmerRenderer, type Parts } from './render/farmer.ts';
 import { SCALE, type Pixels, type Rect, type Surface } from './render/pixels.ts';
@@ -25,11 +26,21 @@ interface Choice<T> {
 }
 
 const LABEL = 'font-semibold';
-export const BUTTON = 'rounded border border-black/20 bg-white hover:bg-white/70 aria-pressed:bg-black aria-pressed:text-white';
 const TAB =
-  'rounded border border-black/20 bg-white px-4 py-1 font-semibold hover:bg-white/70 aria-selected:border-[#8B4513] aria-selected:bg-[#8B4513] aria-selected:text-white';
+  'flex h-12 w-12 items-center justify-center bg-[length:100%_100%] bg-no-repeat pt-2 [image-rendering:pixelated] transition-transform hover:-translate-y-0.5 aria-selected:translate-y-2';
 const OPTION =
   'flex flex-col items-center rounded border-2 border-transparent bg-white/50 p-1 text-xs font-semibold hover:bg-white aria-pressed:border-[#8B4513] aria-pressed:bg-white';
+const GENDER =
+  'flex h-12 w-12 items-center justify-center rounded border-2 border-transparent bg-white/50 hover:bg-white aria-pressed:border-[#8B4513] aria-pressed:bg-white';
+const UI_ICONS = {
+  male: [13, 13],
+  female: [10, 16],
+  dice: [10, 10],
+  'arrow-left': [44, 40],
+  'arrow-right': [44, 40],
+  down: [11, 12],
+  letter: [15, 13],
+};
 
 const FULL_BODY = bodyArea(0, 0, 16, 32);
 const BUST = bodyArea(0, 0, 16, 20);
@@ -45,32 +56,35 @@ const OUTFIT_CHANGED = 'outfitchange';
 export const BAR_NAMES = ['Hue', 'Saturation', 'Value'];
 const previews = new WeakMap<HTMLElement, () => void>();
 
-export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTMLElement {
+export function createPreview(canvas: HTMLCanvasElement, state: ViewState, catalog: Catalog): HTMLElement {
   const preview = document.createElement('div');
   preview.className = 'flex flex-col items-center gap-3';
 
   const frame = document.createElement('div');
   frame.className = 'relative rounded-lg border-4 border-[#8B4513] px-4 pt-4 pb-12';
-  const rotate = (label: string, arrow: string, position: string, turn: number) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = arrow;
-    button.ariaLabel = label;
-    button.className = `absolute bottom-2 ${position} h-8 w-8 ${BUTTON}`;
+  const rotate = (label: string, icon: 'arrow-left' | 'arrow-right', position: string, turn: number) => {
+    const button = iconButton(label, icon, 1, `absolute bottom-1 ${position} transition-transform hover:scale-110`);
     button.addEventListener('click', () => {
       state.direction = FACING[(FACING.indexOf(state.direction) + turn) % FACING.length];
     });
     return button;
   };
-  frame.append(canvas, rotate('Rotate left', '◀', 'left-2', 1), rotate('Rotate right', '▶', 'right-2', 3));
+  const random = iconButton('Random farmer', 'dice', 3, 'absolute top-2 left-2 transition-transform hover:scale-110');
+  random.addEventListener('click', () => {
+    Object.assign(state.outfit, randomOutfit(catalog, state.outfit));
+    document.dispatchEvent(new Event(OUTFIT_CHANGED));
+  });
+  frame.append(
+    canvas,
+    random,
+    rotate('Rotate left', 'arrow-left', 'left-1', 1),
+    rotate('Rotate right', 'arrow-right', 'right-1', 3),
+  );
 
   const genders = document.createElement('div');
   genders.className = 'flex gap-2';
   const genderButtons = (['Male', 'Female'] as const).map((label) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = label;
-    button.className = `px-4 py-1 ${BUTTON}`;
+    const button = iconButton(label, label === 'Male' ? 'male' : 'female', 2, GENDER);
     button.addEventListener('click', () => {
       state.outfit.male = label === 'Male';
       syncGender();
@@ -85,15 +99,14 @@ export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTML
   genders.append(...genderButtons);
 
   const walk = document.createElement('label');
-  walk.className = 'flex items-center gap-2 text-sm font-semibold';
+  walk.className = 'flex cursor-pointer items-center gap-2 text-sm font-semibold';
   const walkBox = document.createElement('input');
   walkBox.type = 'checkbox';
-  walkBox.className = 'h-4 w-4';
   walkBox.checked = state.walking;
   walkBox.addEventListener('change', () => {
     state.walking = walkBox.checked;
   });
-  walk.append(walkBox, 'Walk');
+  walk.append(walkBox, gameCheckbox(walkBox, 27), 'Walk');
 
   preview.append(frame, genders, walk);
   return preview;
@@ -108,18 +121,33 @@ export function createEditor(
   const { outfit } = state;
   const tabs = document.createElement('nav');
   tabs.role = 'tablist';
-  tabs.className = 'flex items-center gap-3 border-b-2 border-[#8B4513] pb-4';
+  tabs.className = 'flex items-end gap-3 border-b-2 border-[#8B4513] pb-1';
   const mainTabs = document.createElement('div');
-  mainTabs.className = 'flex flex-1 flex-wrap justify-center gap-2';
+  mainTabs.className = 'flex flex-1 flex-wrap justify-center gap-1';
   const divider = document.createElement('span');
   divider.ariaHidden = 'true';
-  divider.className = 'h-7 w-0.5 bg-[#8B4513]';
+  divider.className = 'mb-2 h-8 w-0.5 bg-[#8B4513]';
   const sideTabs = document.createElement('div');
-  sideTabs.className = 'flex gap-2';
+  sideTabs.className = 'flex gap-1';
+  const tabIcon = (parts: Parts | string, area: Rect, size: string) => {
+    const canvas = thumbnail(size);
+    paint(canvas, typeof parts === 'string' ? renderer.renderHat(parts) : renderer.render(parts), area);
+    return canvas;
+  };
+  const farmer = farmerParts(newFarmer(catalog));
+  const naked: Parts = { male: true, skin: farmer.skin, eyeColor: farmer.eyeColor };
+  const tabIcons: Record<string, HTMLCanvasElement> = {
+    Body: tabIcon(naked, bodyArea(0, 0, 16, 20), 'h-[30px] w-6'),
+    Hair: tabIcon({ ...naked, hairstyle: farmer.hairstyle, hairColor: farmer.hairColor }, bodyArea(0, 0, 16, 16), 'h-6 w-6'),
+    Shirt: tabIcon({ ...naked, shirt: farmer.shirt }, TORSO, 'h-6 w-6'),
+    Pants: tabIcon({ ...naked, pants: farmer.pants, pantsColor: farmer.pantsColor }, LEGS, 'h-6 w-6'),
+    Hat: tabIcon('0', WHOLE_HAT, 'h-[30px] w-[30px]'),
+    Boots: tabIcon({ ...naked, boots: '506' }, FEET, 'h-3 w-6'),
+  };
   tabs.append(mainTabs, divider, sideTabs);
   const panel = document.createElement('div');
   panel.className = 'min-w-80';
-  const sections: { tab: HTMLButtonElement; section: HTMLElement; paint: () => void }[] = [];
+  const sections: { name: string; tab: HTMLButtonElement; section: HTMLElement; paint: () => void }[] = [];
   let active = 0;
 
   const howTo = document.createElement('div');
@@ -129,7 +157,6 @@ export function createEditor(
   howToTitle.textContent = 'How to get';
   const howToHint = document.createElement('p');
   howToHint.className = 'text-black/60';
-  howToHint.textContent = 'Hover or pick a shirt, pants, hat or boots to see how to get it.';
   howTo.append(howToTitle, howToHint);
   const wide = matchMedia('(min-width: 1500px)');
   let infos: { info: HTMLElement; home: HTMLElement; next: ChildNode | null; redraw?: () => void }[][] = [];
@@ -140,6 +167,11 @@ export function createEditor(
         else if (info.parentElement !== home) home.insertBefore(info, next);
       }),
     );
+    const villagersTab = sections[active]?.name === 'Villagers';
+    howToTitle.hidden = villagersTab;
+    howToHint.textContent = villagersTab
+      ? 'Pick your favourite Stardew Valley character to see your farmer dressed like them.'
+      : 'Hover or pick a shirt, pants, hat or boots to see how to get it.';
     howToHint.hidden = infos[active]?.length > 0;
   };
 
@@ -152,20 +184,23 @@ export function createEditor(
     placeDetails();
   };
 
-  const section = (name: string, aside = false) => {
+  const section = (name: string, aside = false, frame = 'tab') => {
     const index = sections.length;
     const tab = document.createElement('button');
     tab.type = 'button';
     tab.role = 'tab';
-    tab.textContent = name;
+    tab.ariaLabel = name;
+    tab.title = name;
     tab.className = TAB;
+    tab.style.backgroundImage = `url(${import.meta.env.BASE_URL}ui/${frame}.png)`;
+    if (tabIcons[name]) tab.append(tabIcons[name]);
     tab.addEventListener('click', () => show(index));
     const grid = document.createElement('div');
     grid.role = 'tabpanel';
     grid.className = 'grid grid-cols-[6rem_auto] items-start gap-x-3 gap-y-3 text-sm';
     (aside ? sideTabs : mainTabs).append(tab);
     panel.append(grid);
-    const entry = { tab, section: grid, paint: () => {} };
+    const entry = { name, tab, section: grid, paint: () => {} };
     sections.push(entry);
     return {
       row: (label: string, field: HTMLElement) => {
@@ -253,7 +288,7 @@ export function createEditor(
   const hair = section('Hair');
   const hairPictures = catalog.hairstyles.map(() => thumbnail('h-12 w-8'));
   hair.row(
-    'Style',
+    'Hair',
     choiceGrid(
       catalog.hairstyles.map((style, i) => ({ value: style.id, label: String(i + 1), picture: hairPictures[i] })),
       'grid-cols-8',
@@ -300,7 +335,7 @@ export function createEditor(
   document.addEventListener(OUTFIT_CHANGED, syncShirtColor);
   const shirtPictures = catalog.shirts.map(() => thumbnail('h-12 w-12'));
   shirt.row(
-    'Style',
+    'Shirt',
     choiceGrid(
       catalog.shirts.map((item, i) => {
         const number = shirtNumber(item);
@@ -362,7 +397,7 @@ export function createEditor(
   document.addEventListener(OUTFIT_CHANGED, syncPantsColor);
   const pantsPictures = catalog.pants.map(() => thumbnail('h-12 w-12'));
   pants.row(
-    'Style',
+    'Pants',
     choiceGrid(
       catalog.pants.map((item, i) => {
         const number = pantsNumber(item);
@@ -411,7 +446,7 @@ export function createEditor(
   const hat = section('Hat');
   const hatPictures = catalog.hats.map(() => thumbnail('h-10 w-10'));
   hat.row(
-    'Style',
+    'Hat',
     choiceGrid<string | null>(
       [
         { value: null, caption: 'None', picture: noneIcon('h-10 w-10') },
@@ -452,7 +487,7 @@ export function createEditor(
   const boots = section('Boots');
   const bootsPictures = catalog.boots.map(() => thumbnail('h-6 w-12'));
   boots.row(
-    'Style',
+    'Boots',
     choiceGrid<string | null>(
       [
         { value: null, caption: 'None', picture: noneIcon('h-6 w-12') },
@@ -489,7 +524,7 @@ export function createEditor(
     ),
   );
 
-  const villagers = section('Villagers', true);
+  const villagers = section('Villagers', true, 'tab-villagers');
   const villagerPictures = VILLAGERS.map(() => thumbnail('h-16 w-8'));
   let villager: string | null = null;
   villagers.row(
@@ -757,6 +792,21 @@ export function itemLabels(items: { id: string; name: string }[]): Map<string, s
 
 function bodyArea(left: number, top: number, width: number, height: number): Rect {
   return { x: BODY_X + left * SCALE, y: BODY_Y + top * SCALE, width: width * SCALE, height: height * SCALE };
+}
+
+export function iconButton(label: string, icon: keyof typeof UI_ICONS, scale: number, className: string): HTMLButtonElement {
+  const [width, height] = UI_ICONS[icon];
+  const image = new Image(width * scale, height * scale);
+  image.src = `${import.meta.env.BASE_URL}ui/${icon}.png`;
+  image.alt = '';
+  image.className = '[image-rendering:pixelated]';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.ariaLabel = label;
+  button.title = label;
+  button.className = className;
+  button.append(image);
+  return button;
 }
 
 export function thumbnail(size: string): HTMLCanvasElement {

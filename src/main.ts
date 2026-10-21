@@ -28,7 +28,7 @@ const { tabs, panel, howTo, refresh } = createEditor(catalog, state, renderer, t
 document.querySelector('#details')!.append(howTo);
 const content = document.createElement('div');
 content.className = 'flex flex-col items-center gap-8 md:flex-row md:items-start';
-const preview = createPreview(canvas, state);
+const preview = createPreview(canvas, state, catalog);
 preview.append(createShareControls(catalog, state, renderer));
 content.append(preview, panel);
 app.append(tabs, content);
