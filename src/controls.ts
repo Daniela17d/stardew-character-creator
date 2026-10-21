@@ -185,6 +185,10 @@ export function createEditor(
   const pantsNames = distinctNames(catalog.pants);
   const hatNames = distinctNames(catalog.hats);
   const bootsNames = distinctNames(catalog.boots);
+  const shirtLabels = itemLabels(catalog.shirts);
+  const pantsLabels = itemLabels(catalog.pants);
+  const hatLabels = itemLabels(catalog.hats);
+  const bootsLabels = itemLabels(catalog.boots);
   const shirtNotes = notesFor('shirts', shirtNames);
   const pantsNotes = notesFor('pants', pantsNames);
   const hatNotes = notesFor('hats', hatNames);
@@ -303,7 +307,7 @@ export function createEditor(
         return {
           value: item.id,
           label: number,
-          caption: newGameCaption(shirtNames.get(item.id) ?? item.name, number),
+          caption: newGameCaption(shirtLabels.get(item.id) ?? item.name, number),
           details: () => itemDetails(catalog, item, shirtNotes(item.id)),
           picture: shirtPictures[i],
         };
@@ -365,7 +369,7 @@ export function createEditor(
         return {
           value: item.id,
           label: number,
-          caption: newGameCaption(pantsNames.get(item.id) ?? item.name, number),
+          caption: newGameCaption(pantsLabels.get(item.id) ?? item.name, number),
           details: () => itemDetails(catalog, item, pantsNotes(item.id)),
           picture: pantsPictures[i],
         };
@@ -413,7 +417,7 @@ export function createEditor(
         { value: null, caption: 'None', picture: noneIcon('h-10 w-10') },
         ...catalog.hats.map((item, i) => ({
           value: item.id,
-          caption: hatNames.get(item.id),
+          caption: hatLabels.get(item.id),
           details: () => itemDetails(catalog, item, hatNotes(item.id)),
           picture: hatPictures[i],
         })),
@@ -454,7 +458,7 @@ export function createEditor(
         { value: null, caption: 'None', picture: noneIcon('h-6 w-12') },
         ...catalog.boots.map((item, i) => ({
           value: item.id,
-          caption: bootsNames.get(item.id),
+          caption: bootsLabels.get(item.id),
           details: () => itemDetails(catalog, item, bootsNotes(item.id)),
           picture: bootsPictures[i],
         })),
@@ -738,10 +742,17 @@ function ingredient(catalog: Catalog, { name, icon }: Ingredient): HTMLElement {
   return chip;
 }
 
-export function distinctNames(items: { id: string; name: string }[]): Map<string, string> {
+export function distinctNames(
+  items: { id: string; name: string }[],
+  withId = (name: string, id: string) => `${name} (${id})`,
+): Map<string, string> {
   const counts = new Map<string, number>();
   for (const { name } of items) counts.set(name, (counts.get(name) ?? 0) + 1);
-  return new Map(items.map(({ id, name }) => [id, (counts.get(name) ?? 0) > 1 ? `${name} (${id})` : name]));
+  return new Map(items.map(({ id, name }) => [id, (counts.get(name) ?? 0) > 1 ? withId(name, id) : name]));
+}
+
+export function itemLabels(items: { id: string; name: string }[]): Map<string, string> {
+  return distinctNames(items, (name, id) => `${name} · ID ${id}`);
 }
 
 function bodyArea(left: number, top: number, width: number, height: number): Rect {

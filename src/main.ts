@@ -3,13 +3,9 @@ import { createEditor, createPreview, type ViewState } from './controls.ts';
 import { farmerParts } from './outfit.ts';
 import { IDLE, WALK, WALK_FRAME_MS } from './render/animation.ts';
 import { FRAME_HEIGHT, FRAME_WIDTH, FarmerRenderer } from './render/farmer.ts';
-import { drawSpriteText } from './render/sprite-text.ts';
 import { loadTextures } from './render/textures.ts';
 import { createShareControls, outfitFromParams, syncUrl } from './share.ts';
 import { createSummary } from './summary.ts';
-
-const title = document.querySelector<HTMLCanvasElement>('#title')!;
-drawSpriteText(title, title.getAttribute('aria-label')!, 3);
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const catalog = await loadCatalog();

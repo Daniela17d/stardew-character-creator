@@ -9,7 +9,7 @@ import {
   TORSO,
   WHOLE_HAT,
   barGradient,
-  distinctNames,
+  itemLabels,
   paint,
   pantsNumber,
   shirtNumber,
@@ -48,10 +48,10 @@ export function createSummary(
   list.className = 'grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm';
   panel.append(header, list);
 
-  const shirtNames = distinctNames(catalog.shirts);
-  const pantsNames = distinctNames(catalog.pants);
-  const hatNames = distinctNames(catalog.hats);
-  const bootsNames = distinctNames(catalog.boots);
+  const shirtNames = itemLabels(catalog.shirts);
+  const pantsNames = itemLabels(catalog.pants);
+  const hatNames = itemLabels(catalog.hats);
+  const bootsNames = itemLabels(catalog.boots);
   let lines: Line[] = [];
 
   copy.addEventListener('click', async () => {

@@ -341,8 +341,6 @@ const villagerSprites = (JSON.parse(readFileSync(join(root, 'src', 'npc-presets.
   ({ sprite }) => `Characters/${sprite}`,
 );
 for (const sprite of villagerSprites) check(existsSync(join(contentDir, `${sprite}.png`)), `No villager sprite ${sprite}`);
-const titleFont = 'LooseSprites/font_bold';
-check(existsSync(join(contentDir, `${titleFont}.png`)), `No title font ${titleFont}`);
 
 
 rmSync(outDir, { recursive: true, force: true });
@@ -353,16 +351,14 @@ for (const [key, texture] of Object.entries({ ...catalog.textures, ...catalog.ic
   copyFileSync(join(contentDir, `${key}.png`), target);
 }
 for (const sprite of villagerSprites) copyFileSync(join(contentDir, `${sprite}.png`), join(outDir, `${sprite}.png`));
-mkdirSync(join(outDir, dirname(titleFont)), { recursive: true });
-copyFileSync(join(contentDir, `${titleFont}.png`), join(outDir, `${titleFont}.png`));
 writeFileSync(join(outDir, 'catalog.json'), formatCatalog(catalog));
 
 console.log(
   `Catalogue for Stardew Valley ${gameVersion}: ${hairstyles.length} hairstyles, ` +
     `${accessories.length} accessories, ${catalog.skinTones.count} skin tones, ` +
     `${shirts.length} shirts, ${pants.length} pants, ${hats.length} hats, ${boots.length} boots. ` +
-    `Wrote catalog.json, ${Object.keys(textures).length} textures, ${Object.keys(icons).length} icon sheets, ` +
-    `${villagerSprites.length} villager sprites and the title font to public/assets/.`,
+    `Wrote catalog.json, ${Object.keys(textures).length} textures, ${Object.keys(icons).length} icon sheets ` +
+    `and ${villagerSprites.length} villager sprites to public/assets/.`,
 );
 
 

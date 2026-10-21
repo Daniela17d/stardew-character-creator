@@ -25,7 +25,8 @@ export const VILLAGERS: Villager[] = presets;
 export function villagerOutfit(catalog: Catalog, villager: Villager, current: Outfit): Outfit {
   const find = <T extends { id: string; name: string }>(items: T[], field: string, caption: string | null) => {
     if (caption === null) return undefined;
-    const id = /\(([^)]+)\)$/.exec(caption)?.[1];
+    const match = /(?:\(([^)]+)\)|ID (\S+))$/.exec(caption);
+    const id = match?.[1] ?? match?.[2];
     const item = items.find((entry) => entry.id === id) ?? items.find((entry) => entry.name === caption);
     if (!item) console.warn(`${villager.name}: no ${field} called "${caption}"`);
     return item;
