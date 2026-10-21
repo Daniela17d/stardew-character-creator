@@ -1,10 +1,11 @@
 import { loadCatalog } from './catalog/load.ts';
 import { createEditor, createPreview, type ViewState } from './controls.ts';
-import { newFarmer } from './outfit.ts';
+import { farmerParts, newFarmer } from './outfit.ts';
 import { IDLE, WALK, WALK_FRAME_MS } from './render/animation.ts';
 import { FRAME_HEIGHT, FRAME_WIDTH, FarmerRenderer } from './render/farmer.ts';
 import { drawSpriteText } from './render/sprite-text.ts';
 import { loadTextures } from './render/textures.ts';
+import { createSummary } from './summary.ts';
 
 const title = document.querySelector<HTMLCanvasElement>('#title')!;
 drawSpriteText(title, title.getAttribute('aria-label')!, 3);
@@ -28,17 +29,22 @@ content.className = 'flex flex-col items-center gap-8 md:flex-row md:items-start
 content.append(createPreview(canvas, state), panel);
 app.append(tabs, content);
 
+const summary = createSummary(catalog, state, renderer);
+document.querySelector('#summary')!.append(summary.panel);
+
 let lastDrawn = '';
 
 function draw(time: number): void {
   refresh();
+  summary.refresh();
   const frames = WALK[state.direction];
   const step = state.walking ? Math.floor(time / WALK_FRAME_MS) % frames.length : -1;
-  const animated = renderer.isAnimated(state.outfit);
+  const parts = farmerParts(state.outfit);
+  const animated = renderer.isAnimated(parts);
   const key = JSON.stringify([state, step, animated ? time : 0]);
   if (key !== lastDrawn) {
     lastDrawn = key;
-    const surface = renderer.render(state.outfit, state.direction, step < 0 ? IDLE[state.direction] : frames[step], time);
+    const surface = renderer.render(parts, state.direction, step < 0 ? IDLE[state.direction] : frames[step], time);
     context.putImageData(new ImageData(surface.toStraightAlpha(), FRAME_WIDTH, FRAME_HEIGHT), 0, 0);
   }
   requestAnimationFrame(draw);

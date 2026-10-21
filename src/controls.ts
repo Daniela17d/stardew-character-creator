@@ -1,6 +1,6 @@
 import { ACCESSORY_NAMES } from './accessory-names.ts';
-import type { Catalog, Ingredient, Rgb, Source, Tailoring } from './catalog/types.ts';
-import { barsToRgb, hsvToRgb, rgbToBars, toHex, type Bars } from './color.ts';
+import type { Catalog, Ingredient, Pants, Shirt, Source, Tailoring } from './catalog/types.ts';
+import { BAR_MAX, barsToRgb, hsvToRgb, rgbToBars, toHex, type Bars } from './color.ts';
 import { createFilter } from './filters.ts';
 import { bootsColors, correctColors, hatColors, pantsColors, shirtColors } from './item-colors.ts';
 import SOURCE_NOTES from './item-sources.json';
@@ -25,7 +25,7 @@ interface Choice<T> {
 }
 
 const LABEL = 'font-semibold';
-const BUTTON = 'rounded border border-black/20 bg-white hover:bg-white/70 aria-pressed:bg-black aria-pressed:text-white';
+export const BUTTON = 'rounded border border-black/20 bg-white hover:bg-white/70 aria-pressed:bg-black aria-pressed:text-white';
 const TAB =
   'rounded border border-black/20 bg-white px-4 py-1 font-semibold hover:bg-white/70 aria-selected:border-[#8B4513] aria-selected:bg-[#8B4513] aria-selected:text-white';
 const OPTION =
@@ -34,16 +34,15 @@ const OPTION =
 const FULL_BODY = bodyArea(0, 0, 16, 32);
 const BUST = bodyArea(0, 0, 16, 20);
 const HEAD = bodyArea(0, 0, 16, 24);
-const TORSO = bodyArea(2, 13, 12, 12);
-const LEGS = bodyArea(0, 16, 16, 16);
-const FEET = bodyArea(0, 24, 16, 8);
-const WHOLE_HAT: Rect = { x: 0, y: 0, width: 20 * SCALE, height: 20 * SCALE };
+export const TORSO = bodyArea(2, 13, 12, 12);
+export const LEGS = bodyArea(0, 16, 16, 16);
+export const FEET = bodyArea(0, 24, 16, 8);
+export const WHOLE_HAT: Rect = { x: 0, y: 0, width: 20 * SCALE, height: 20 * SCALE };
 const ICON_SCALE = 2;
 
 const FACING: Direction[] = ['up', 'right', 'down', 'left'];
 const OUTFIT_CHANGED = 'outfitchange';
-const BAR_NAMES = ['Hue', 'Saturation', 'Value'];
-const BAR_MAX = 99;
+export const BAR_NAMES = ['Hue', 'Saturation', 'Value'];
 
 export function createPreview(canvas: HTMLCanvasElement, state: ViewState): HTMLElement {
   const preview = document.createElement('div');
@@ -158,7 +157,7 @@ export function createEditor(
     };
   };
 
-  const bare = (): Parts => ({ male: outfit.male, skin: outfit.skin, eyeColor: outfit.eyeColor });
+  const bare = (): Parts => ({ male: outfit.male, skin: outfit.skin, eyeColor: barsToRgb(outfit.eyeColor) });
   const shirtNames = distinctNames(catalog.shirts);
   const pantsNames = distinctNames(catalog.pants);
   const hatNames = distinctNames(catalog.hats);
@@ -216,7 +215,7 @@ export function createEditor(
     () => [outfit.male, outfit.skin, outfit.eyeColor, outfit.hairColor],
     () =>
       catalog.accessories.forEach(({ id }, i) =>
-        paint(accessoryPictures[i], renderer.render({ ...bare(), accessory: id, hairColor: outfit.hairColor }), BUST),
+        paint(accessoryPictures[i], renderer.render({ ...bare(), accessory: id, hairColor: barsToRgb(outfit.hairColor) }), BUST),
       ),
   );
   body.paintWith(() => {
@@ -250,7 +249,11 @@ export function createEditor(
       () => [outfit.male, outfit.skin, outfit.eyeColor, outfit.hairColor],
       () =>
         catalog.hairstyles.forEach((style, i) =>
-          paint(hairPictures[i], renderer.render({ ...bare(), hairstyle: style.id, hairColor: outfit.hairColor }), HEAD),
+          paint(
+            hairPictures[i],
+            renderer.render({ ...bare(), hairstyle: style.id, hairColor: barsToRgb(outfit.hairColor) }),
+            HEAD,
+          ),
         ),
     ),
   );
@@ -273,7 +276,7 @@ export function createEditor(
     'Style',
     choiceGrid(
       catalog.shirts.map((item, i) => {
-        const number = item.creation ? String((item.sprite.y / 32) * 16 + item.sprite.x / 8 + 1) : '';
+        const number = shirtNumber(item);
         return {
           value: item.id,
           label: number,
@@ -286,7 +289,8 @@ export function createEditor(
       () => outfit.shirt,
       (id) => {
         outfit.shirt = id;
-        outfit.shirtColor = catalog.shirts.find((item) => item.id === id)?.color ?? outfit.shirtColor;
+        const color = catalog.shirts.find((item) => item.id === id)?.color;
+        if (color) outfit.shirtColor = rgbToBars(color);
         syncShirtColor();
       },
       undefined,
@@ -334,7 +338,7 @@ export function createEditor(
     'Style',
     choiceGrid(
       catalog.pants.map((item, i) => {
-        const number = item.creation ? String((item.sprite.y / 688) * 10 + item.sprite.x / 192 + 1) : '';
+        const number = pantsNumber(item);
         return {
           value: item.id,
           label: number,
@@ -579,6 +583,14 @@ function choiceGrid<T>(
   return field;
 }
 
+export function shirtNumber(item: Shirt): string {
+  return item.creation ? String((item.sprite.y / 32) * 16 + item.sprite.x / 8 + 1) : '';
+}
+
+export function pantsNumber(item: Pants): string {
+  return item.creation ? String((item.sprite.y / 688) * 10 + item.sprite.x / 192 + 1) : '';
+}
+
 function newGameCaption(name: string, number: string): string {
   return number ? `${name} · new game #${number}` : name;
 }
@@ -660,7 +672,7 @@ function ingredient(catalog: Catalog, { name, icon }: Ingredient): HTMLElement {
   return chip;
 }
 
-function distinctNames(items: { id: string; name: string }[]): Map<string, string> {
+export function distinctNames(items: { id: string; name: string }[]): Map<string, string> {
   const counts = new Map<string, number>();
   for (const { name } of items) counts.set(name, (counts.get(name) ?? 0) + 1);
   return new Map(items.map(({ id, name }) => [id, (counts.get(name) ?? 0) > 1 ? `${name} (${id})` : name]));
@@ -670,7 +682,7 @@ function bodyArea(left: number, top: number, width: number, height: number): Rec
   return { x: BODY_X + left * SCALE, y: BODY_Y + top * SCALE, width: width * SCALE, height: height * SCALE };
 }
 
-function thumbnail(size: string): HTMLCanvasElement {
+export function thumbnail(size: string): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.className = `${size} [image-rendering:pixelated]`;
   return canvas;
@@ -684,13 +696,13 @@ function noneIcon(size: string): HTMLElement {
   return icon;
 }
 
-function paint(canvas: HTMLCanvasElement, surface: Surface, area: Rect): void {
+export function paint(canvas: HTMLCanvasElement, surface: Surface, area: Rect): void {
   canvas.width = area.width;
   canvas.height = area.height;
   canvas.getContext('2d')!.putImageData(new ImageData(surface.toStraightAlpha(), surface.width, surface.height), -area.x, -area.y);
 }
 
-function whenChanged(key: () => unknown[], draw: () => void): () => void {
+export function whenChanged(key: () => unknown[], draw: () => void): () => void {
   let drawnFor: string | null = null;
   return () => {
     const next = JSON.stringify(key());
@@ -711,14 +723,12 @@ function drawSprite(canvas: HTMLCanvasElement, url: string): void {
 }
 
 function colorBars(
-  get: () => Rgb,
-  set: (value: Rgb) => void,
+  get: () => Bars,
+  set: (value: Bars) => void,
   note: string,
 ): { field: HTMLFieldSetElement; sync: () => void } {
   const field = document.createElement('fieldset');
   field.className = 'flex flex-col gap-1 pt-1 disabled:opacity-30';
-  let bars: Bars = [0, 0, 0];
-  let shown: Rgb | undefined;
   const sliders = BAR_NAMES.map((name, i) => {
     const input = document.createElement('input');
     input.type = 'range';
@@ -728,10 +738,10 @@ function colorBars(
     const number = document.createElement('span');
     number.className = 'w-7 text-right font-semibold tabular-nums';
     input.addEventListener('input', () => {
+      const bars: Bars = [...get()];
       bars[i] = Number(input.value);
-      shown = barsToRgb(bars);
-      set(shown);
-      draw();
+      set(bars);
+      sync();
     });
     const letter = document.createElement('span');
     letter.ariaHidden = 'true';
@@ -744,23 +754,13 @@ function colorBars(
     field.append(row);
     return { input, number };
   });
-  sliders[0].input.style.background = gradient((step) => hsvToRgb(step * 360, 0.9, 0.9));
-  const draw = () => {
-    const [hue, saturation, value] = bars;
-    sliders[1].input.style.background = gradient((step) => hsvToRgb((hue / 100) * 360, step, value / 100));
-    sliders[2].input.style.background = gradient((step) => hsvToRgb((hue / 100) * 360, saturation / 100, step));
+  const sync = () => {
+    const bars = get();
     sliders.forEach(({ input, number }, i) => {
+      input.style.background = barGradient(bars, i);
       input.value = String(bars[i]);
       number.textContent = String(bars[i]);
     });
-  };
-  const sync = () => {
-    if (get().join() !== shown?.join()) {
-      bars = rgbToBars(get()).map((bar) => Math.min(BAR_MAX, bar)) as Bars;
-      shown = barsToRgb(bars);
-      set(shown);
-    }
-    draw();
   };
   const hint = document.createElement('p');
   hint.className = 'text-xs italic text-black/60';
@@ -771,6 +771,12 @@ function colorBars(
   return { field, sync };
 }
 
-function gradient(color: (step: number) => Rgb): string {
+export function barGradient([hue, saturation, value]: Bars, index: number): string {
+  const degrees = (hue / 100) * 360;
+  const color = [
+    (step: number) => hsvToRgb(step * 360, 0.9, 0.9),
+    (step: number) => hsvToRgb(degrees, step, value / 100),
+    (step: number) => hsvToRgb(degrees, saturation / 100, step),
+  ][index];
   return `linear-gradient(to right, ${Array.from({ length: 24 }, (_, i) => toHex(color(i / 24))).join(', ')})`;
 }

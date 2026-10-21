@@ -31,6 +31,17 @@ body {
     background: #d97a2b;
 }
 
+.bar-marker {
+    position: absolute;
+    top: 50%;
+    width: 0.75rem;
+    height: 1.125rem;
+    translate: -50% -50%;
+    border: 2px solid #5b2b0a;
+    border-radius: 0.25rem;
+    background: #d97a2b;
+}
+
 .color-bar::-moz-range-thumb {
     width: 0.75rem;
     height: 1.125rem;

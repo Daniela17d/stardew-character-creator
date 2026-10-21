@@ -2,6 +2,8 @@ import type { Rgb } from './catalog/types.ts';
 
 export type Bars = [hue: number, saturation: number, value: number];
 
+export const BAR_MAX = 99;
+
 export function toHex(color: Rgb): string {
   return `#${color.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }
@@ -38,7 +40,7 @@ export function rgbToBars([r, g, b]: Rgb): Bars {
   const saturation = max === 0 ? 0 : f(delta / max);
   return [
     Number.isNaN(hue) ? 0 : Math.trunc(f(f(hue / 360) * 100)),
-    Math.trunc(f(saturation * 100)),
-    Math.trunc(f(f(max / 255) * 100)),
+    Math.min(BAR_MAX, Math.trunc(f(saturation * 100))),
+    Math.min(BAR_MAX, Math.trunc(f(f(max / 255) * 100))),
   ];
 }

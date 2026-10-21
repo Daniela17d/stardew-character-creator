@@ -1,5 +1,5 @@
 import type { Catalog } from './catalog/types.ts';
-import { fromHex } from './color.ts';
+import { fromHex, rgbToBars } from './color.ts';
 import presets from './npc-presets.json';
 import type { Outfit } from './outfit.ts';
 
@@ -35,15 +35,23 @@ export function villagerOutfit(catalog: Catalog, villager: Villager, current: Ou
   return {
     male: villager.gender !== 'female',
     skin: villager.skin - 1,
-    eyeColor: fromHex(villager.eyes),
+    eyeColor: rgbToBars(fromHex(villager.eyes)),
     hairstyle: catalog.hairstyles[villager.hairstyle - 1]?.id ?? current.hairstyle,
-    hairColor: fromHex(villager.hairColor),
+    hairColor: rgbToBars(fromHex(villager.hairColor)),
     accessory: villager.accessory === null ? null : villager.accessory - 2,
     hat: find(catalog.hats, 'hat', villager.hat)?.id ?? null,
     shirt: shirt?.id ?? current.shirt,
-    shirtColor: villager.shirtColor ? fromHex(villager.shirtColor) : (shirt?.color ?? current.shirtColor),
+    shirtColor: villager.shirtColor
+      ? rgbToBars(fromHex(villager.shirtColor))
+      : shirt
+        ? rgbToBars(shirt.color)
+        : current.shirtColor,
     pants: pants?.id ?? current.pants,
-    pantsColor: villager.pantsColor ? fromHex(villager.pantsColor) : (pants?.color ?? current.pantsColor),
+    pantsColor: villager.pantsColor
+      ? rgbToBars(fromHex(villager.pantsColor))
+      : pants
+        ? rgbToBars(pants.color)
+        : current.pantsColor,
     boots: find(catalog.boots, 'boots', villager.boots)?.id ?? null,
   };
 }
