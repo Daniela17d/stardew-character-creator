@@ -6,7 +6,6 @@ const { version } = JSON.parse(readFileSync(new URL('package.json', import.meta.
 const { gameVersion } = JSON.parse(readFileSync(new URL('public/assets/catalog.json', import.meta.url), 'utf8'));
 
 export default defineConfig({
-  base: '/stardew-farmer-creator/',
   plugins: [
     tailwindcss(),
     {
