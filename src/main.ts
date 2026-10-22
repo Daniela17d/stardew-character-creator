@@ -7,6 +7,20 @@ import { loadTextures } from './render/textures.ts';
 import { createShareControls, outfitFromParams, syncUrl } from './share.ts';
 import { createSummary } from './summary.ts';
 
+const tutorial = document.querySelector<HTMLDialogElement>('#tutorial')!;
+document.querySelector('#help')!.addEventListener('click', () => tutorial.showModal());
+tutorial.addEventListener('click', (event) => {
+  const box = tutorial.getBoundingClientRect();
+  const outside = event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom;
+  if (outside) tutorial.close();
+});
+try {
+  if (!localStorage.getItem('tutorial-seen')) {
+    localStorage.setItem('tutorial-seen', '1');
+    tutorial.showModal();
+  }
+} catch {}
+
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const catalog = await loadCatalog();
 const textures = await loadTextures(catalog);
